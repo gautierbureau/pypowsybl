@@ -400,3 +400,21 @@ def test_shunt_sensi():
     assert 0.0 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['vl1_0'], 1e-3)
     assert 1168.841743 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b2'], 1e-3)
     assert 2334.586066 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b3'], 1e-3)
+
+
+def test_branch_parameter_sensi():
+    # Sensitivity of a branch active power flow to the branch series parameters: resistance (Ohm),
+    # reactance (Ohm) and admittance (S). The variable id is the branch id.
+    n = pp.network.create_eurostag_tutorial_example1_network()
+    line = 'NHV1_NHV2_1'
+    analysis = pp.sensitivity.create_ac_analysis()
+    analysis.add_factor_matrix([line], [line], [], ContingencyContextType.NONE,
+                               SensitivityFunctionType.BRANCH_ACTIVE_POWER_1, SensitivityVariableType.BRANCH_RESISTANCE, 'r')
+    analysis.add_factor_matrix([line], [line], [], ContingencyContextType.NONE,
+                               SensitivityFunctionType.BRANCH_ACTIVE_POWER_1, SensitivityVariableType.BRANCH_REACTANCE, 'x')
+    analysis.add_factor_matrix([line], [line], [], ContingencyContextType.NONE,
+                               SensitivityFunctionType.BRANCH_ACTIVE_POWER_1, SensitivityVariableType.BRANCH_ADMITTANCE, 'y')
+    result = analysis.run(n)
+    assert 1.880628 == pytest.approx(result.get_sensitivity_matrix('r').loc[line][line], 1e-3)
+    assert -4.719600 == pytest.approx(result.get_sensitivity_matrix('x').loc[line][line], 1e-3)
+    assert 4973.888550 == pytest.approx(result.get_sensitivity_matrix('y').loc[line][line], 1e-3)

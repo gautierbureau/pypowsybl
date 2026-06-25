@@ -749,7 +749,10 @@ public final class PyPowsyblApiHeader {
         TRANSFORMER_PHASE_1,
         TRANSFORMER_PHASE_2,
         TRANSFORMER_PHASE_3,
-        SHUNT_COMPENSATOR_SUSCEPTANCE;
+        SHUNT_COMPENSATOR_SUSCEPTANCE,
+        BRANCH_RESISTANCE,
+        BRANCH_REACTANCE,
+        BRANCH_ADMITTANCE;
 
         @CEnumValue
         public native int getCValue();

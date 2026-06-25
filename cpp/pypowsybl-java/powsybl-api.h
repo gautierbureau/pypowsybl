@@ -260,6 +260,9 @@ typedef enum {
     TRANSFORMER_PHASE_2,
     TRANSFORMER_PHASE_3,
     SHUNT_COMPENSATOR_SUSCEPTANCE,
+    BRANCH_RESISTANCE,
+    BRANCH_REACTANCE,
+    BRANCH_ADMITTANCE,
 } sensitivity_variable_type;
 
 typedef enum {
