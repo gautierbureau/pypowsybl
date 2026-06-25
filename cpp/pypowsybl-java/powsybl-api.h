@@ -263,6 +263,7 @@ typedef enum {
     BRANCH_RESISTANCE,
     BRANCH_REACTANCE,
     BRANCH_ADMITTANCE,
+    SVC_PILOT_POINT_TARGET_VOLTAGE,
 } sensitivity_variable_type;
 
 typedef enum {

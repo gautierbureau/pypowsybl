@@ -1130,7 +1130,8 @@ PYBIND11_MODULE(_pypowsybl, m) {
             .value("SHUNT_COMPENSATOR_SUSCEPTANCE", sensitivity_variable_type::SHUNT_COMPENSATOR_SUSCEPTANCE)
             .value("BRANCH_RESISTANCE", sensitivity_variable_type::BRANCH_RESISTANCE)
             .value("BRANCH_REACTANCE", sensitivity_variable_type::BRANCH_REACTANCE)
-            .value("BRANCH_ADMITTANCE", sensitivity_variable_type::BRANCH_ADMITTANCE);
+            .value("BRANCH_ADMITTANCE", sensitivity_variable_type::BRANCH_ADMITTANCE)
+            .value("SVC_PILOT_POINT_TARGET_VOLTAGE", sensitivity_variable_type::SVC_PILOT_POINT_TARGET_VOLTAGE);
 
     m.def("get_post_contingency_results", &pypowsybl::getPostContingencyResults, "get post contingency results of a security analysis", py::arg("result"));
     m.def("get_pre_contingency_result", &pypowsybl::getPreContingencyResult, "get pre contingency result of a security analysis", py::arg("result"));

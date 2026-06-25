@@ -355,6 +355,7 @@ public final class Util {
             case BRANCH_RESISTANCE -> SensitivityVariableType.BRANCH_RESISTANCE;
             case BRANCH_REACTANCE -> SensitivityVariableType.BRANCH_REACTANCE;
             case BRANCH_ADMITTANCE -> SensitivityVariableType.BRANCH_ADMITTANCE;
+            case SVC_PILOT_POINT_TARGET_VOLTAGE -> SensitivityVariableType.SVC_PILOT_POINT_TARGET_VOLTAGE;
         };
     }
 

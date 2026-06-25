@@ -172,6 +172,7 @@ class SensitivityAnalysis(ContingencyContainer):
          - BRANCH_RESISTANCE
          - BRANCH_REACTANCE
          - BRANCH_ADMITTANCE
+         - SVC_PILOT_POINT_TARGET_VOLTAGE
 
         Args:
             functions_ids:              functions for which the sensitivities for the sensitivity_function_type should be computed

@@ -752,7 +752,8 @@ public final class PyPowsyblApiHeader {
         SHUNT_COMPENSATOR_SUSCEPTANCE,
         BRANCH_RESISTANCE,
         BRANCH_REACTANCE,
-        BRANCH_ADMITTANCE;
+        BRANCH_ADMITTANCE,
+        SVC_PILOT_POINT_TARGET_VOLTAGE;
 
         @CEnumValue
         public native int getCValue();
