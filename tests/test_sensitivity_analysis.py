@@ -398,5 +398,5 @@ def test_shunt_sensi():
                                SensitivityFunctionType.BUS_VOLTAGE, SensitivityVariableType.SHUNT_COMPENSATOR_SUSCEPTANCE, 'm1')
     result = analysis.run(n)
     assert 0.0 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['vl1_0'], 1e-3)
-    assert 1.168842 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b2'], 1e-3)
-    assert 2.334586 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b3'], 1e-3)
+    assert 1168.841743 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b2'], 1e-3)
+    assert 2334.586066 == pytest.approx(result.get_sensitivity_matrix('m1').loc['SHUNT']['b3'], 1e-3)
