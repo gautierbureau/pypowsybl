@@ -55,9 +55,14 @@ representative case.
   duplicate all of it. `continue-on-error` + a file guard mean a profiling failure
   silently falls back to a normal build - it never breaks the nightly. The profile is
   also uploaded as an artifact. Only Linux gets PGO in snapshot, for validation.
-- **Phase 3:** enable it for released wheels in `full-ci.yml` (there the native build
-  is a separate `native_lib_build` job, so a dedicated profile job feeding the
-  artifact fits cleanly) once snapshot has proven it stable, optionally per-platform.
+- **Phase 3 (this):** released Linux wheels get PGO in `full-ci.yml` -
+  `native_lib_build` generates a profile inline before `Build wheel` (same pattern as
+  Phase 2, same `continue-on-error` fallback so a release is never blocked) and
+  uploads it as an artifact. macOS/Windows wheels are unchanged. Extending PGO to
+  them is a small matrix change (or a dedicated profile job feeding one artifact to
+  all platforms) once cross-platform profile application is validated - PGO profiles
+  are method-keyed and portable, and native-image applies them best-effort, so this
+  is expected to work but has not yet been exercised on macOS/Windows runners.
 
 A stale profile degrades gracefully toward the non-PGO baseline (best-effort method
 matching), so refreshing it is a tuning task, never a build blocker.
