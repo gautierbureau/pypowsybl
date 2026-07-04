@@ -197,9 +197,13 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
 }
 
 template<typename T>
-py::array seriesAsNumpyArray(const series& series) {
-	//Last argument is to bind lifetime of series to the returned array
-    return py::array(py::dtype::of<T>(), series.data.length, series.data.ptr, py::cast(series));
+py::array seriesAsNumpyArray(const series& series, py::handle base) {
+    // The numpy array is a zero-copy view over a buffer owned by the SeriesArray (freed in ~Array).
+    // We anchor the view to the owning Series Python object (base), which transitively keeps the
+    // SeriesArray alive (reference_internal iterator + keep_alive on SeriesArray.__iter__/__getitem__),
+    // so the buffer can't be freed while the view is alive. The caller passes the Series object itself
+    // rather than relying on py::cast(series) to return the owning instance.
+    return py::array(py::dtype::of<T>(), series.data.length, series.data.ptr, base);
 }
 
 py::memoryview pyGetGrid2opIntegerValue(const pypowsybl::JavaHandle& backendHandle, Grid2opIntegerValueType valueType) {
@@ -1078,23 +1082,26 @@ PYBIND11_MODULE(_pypowsybl, m) {
             .def_property_readonly("index", [](const series& s) {
                 return (bool) s.index;
             })
-            .def_property_readonly("data", [](const series& s) -> py::object {
+            .def_property_readonly("data", [](py::object self) -> py::object {
+                const series& s = self.cast<const series&>();
                 switch(s.type) {
                     case 0:
                         return py::cast(pypowsybl::toVector<std::string>((array *) & s.data));
                     case 1:
-                        return seriesAsNumpyArray<double>(s);
+                        return seriesAsNumpyArray<double>(s, self);
                     case 2:
-                        return seriesAsNumpyArray<int>(s);
+                        return seriesAsNumpyArray<int>(s, self);
                     case 3:
-                        return seriesAsNumpyArray<bool>(s);
+                        return seriesAsNumpyArray<bool>(s, self);
                     default:
                         throw pypowsybl::PyPowsyblError("Series type not supported: " + std::to_string(s.type));
                 }
             })
-            .def_property_readonly("mask", [](const series& s) {
+            .def_property_readonly("mask", [](py::object self) -> py::object {
+                const series& s = self.cast<const series&>();
                 if (s.mask != nullptr) {
-                    return py::array(py::dtype::of<int>(), s.data.length, s.mask, py::cast(s.mask));
+                    // Zero-copy view: keep the owning Series (hence SeriesArray) alive via self as base.
+                    return py::array(py::dtype::of<int>(), s.data.length, s.mask, self);
                 } else {
                     return py::array();
                 }
