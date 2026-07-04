@@ -986,19 +986,28 @@ public final class NetworkCFunctions {
                 if (idSerie == null) {
                     throw new PowsyblException("id is missing");
                 }
+                // Collect the string property columns once, then resolve each identifiable a single
+                // time per row (was network.getIdentifiable() per column x row).
+                List<String> propertyNames = new ArrayList<>();
+                List<StringSeries> propertySeries = new ArrayList<>();
                 for (SeriesMetadata column : propertiesDataframe.getSeriesMetadata()) {
                     if (!column.isIndex() && column.getType() == SeriesDataType.STRING) {
-                        String seriesName = column.getName();
-                        StringSeries columnSerie = propertiesDataframe.getStrings(seriesName);
-                        for (int i = 0; i < propertiesDataframe.getRowCount(); i++) {
-                            String id = idSerie.get(i);
-                            Identifiable<?> identifiable = network.getIdentifiable(id);
-                            if (identifiable != null) {
-                                identifiable.setProperty(seriesName, columnSerie.get(i));
-                            } else {
-                                throw new PowsyblException(String.format("identifiable with id : %s does not exist", id));
-                            }
-                        }
+                        propertyNames.add(column.getName());
+                        propertySeries.add(propertiesDataframe.getStrings(column.getName()));
+                    }
+                }
+                if (propertyNames.isEmpty()) {
+                    return;
+                }
+                int rowCount = propertiesDataframe.getRowCount();
+                for (int i = 0; i < rowCount; i++) {
+                    String id = idSerie.get(i);
+                    Identifiable<?> identifiable = network.getIdentifiable(id);
+                    if (identifiable == null) {
+                        throw new PowsyblException(String.format("identifiable with id : %s does not exist", id));
+                    }
+                    for (int c = 0; c < propertyNames.size(); c++) {
+                        identifiable.setProperty(propertyNames.get(c), propertySeries.get(c).get(i));
                     }
                 }
             }
