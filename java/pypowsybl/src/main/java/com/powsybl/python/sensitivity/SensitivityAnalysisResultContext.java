@@ -12,8 +12,11 @@ import com.powsybl.python.commons.PyPowsyblApiHeader;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.WordFactory;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -74,11 +77,13 @@ public class SensitivityAnalysisResultContext {
             return WordFactory.nullPointer();
         }
         int cellCount = matRow * matCol;
-        // malloc (not calloc): every cell is written by the copy loop below, so zero-initializing first is wasted work.
+        // malloc (not calloc): every cell is written by the copy below, so zero-initializing first is wasted work.
+        // Copy in bulk via a native-backed DoubleBuffer: on a large result matrix, DoubleBuffer.put(double[], int, int)
+        // resolves to a single Unsafe.copyMemory on a native buffer with matching byte order, whereas a per-cell
+        // valuePtr.addressOf(i).write(...) loop is one intrinsic call per double.
         CDoublePointer valuePtr = UnmanagedMemory.malloc(cellCount * SizeOf.get(CDoublePointer.class));
-        for (int i = 0; i < cellCount; i++) {
-            valuePtr.addressOf(i).write(sources[srcPos + i]);
-        }
+        ByteBuffer buffer = CTypeConversion.asByteBuffer(valuePtr, cellCount * Double.BYTES).order(ByteOrder.nativeOrder());
+        buffer.asDoubleBuffer().put(sources, srcPos, cellCount);
         PyPowsyblApiHeader.MatrixPointer matrixPtr = UnmanagedMemory.calloc(SizeOf.get(PyPowsyblApiHeader.MatrixPointer.class));
         matrixPtr.setRowCount(matRow);
         matrixPtr.setColumnCount(matCol);
