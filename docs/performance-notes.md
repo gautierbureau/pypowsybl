@@ -84,8 +84,14 @@ churn or they cannot be validated here:
   (`.orElse`, `.orElseThrow`, `.stream()`, ...) for a tiny short-lived
   allocation - high churn, low gain.
 - `Util.createDoubleArray`/`createIntegerArray` box through `List<Double>` /
-  `List<Integer>`; a real fix takes primitive `double[]`/`int[]` signatures and
-  touches all callers, so the boxing is really at the caller.
+  `List<Integer>`. Only 4 call sites exist; 2 are trivial constants
+  (`NetworkModificationsCFunctions` passes `Arrays.asList(min, max)` and
+  `Collections.emptyList()`). The 2 real callers receive their `List<Double>`
+  directly from powsybl-core APIs - `ProportionalScalable.computePercentages`
+  and the GLSK importer's `getInjectionFactorForCountryTimeinterval` - so the
+  boxing is inherent to those upstream signatures. A primitive `double[]`
+  signature here would not remove it: the caller would just unbox the
+  core-provided list itself, on small, cold arrays.
 - pandapower converter uses `df.apply(..., axis=1)` for ID strings and a
   per-generator FFI loop; a Python-only change, but pandapower cannot be
   imported in this environment (a broken transitive Rust extension), so it
