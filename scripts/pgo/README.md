@@ -46,13 +46,18 @@ representative case.
 
 ## Wiring into CI (proposed rollout)
 
-- **Phase 1 (this):** opt-in local builds via `scripts/build-pgo.sh` and the
+- **Phase 1:** opt-in local builds via `scripts/build-pgo.sh` and the
   `-DPYPOWSYBL_PGO_PROFILE` CMake option. CI unchanged.
-- **Phase 2:** add a `pgo_profile` job to `snapshot-ci.yml` that uploads
-  `pypowsybl.iprof` as an artifact; the native build job consumes it via
-  `PYPOWSYBL_PGO_PROFILE`. Nightly snapshot wheels get PGO + real-world validation.
-- **Phase 3:** enable the same in `full-ci.yml` for released wheels once snapshot has
-  proven it stable.
+- **Phase 2 (this):** `snapshot-ci.yml` generates a profile inline on the Linux job
+  (right before `Build wheel`) and the wheel build consumes it via
+  `PYPOWSYBL_PGO_PROFILE`. It runs inline rather than as a separate job because the
+  snapshot job builds the whole dependency chain from source, so a separate job would
+  duplicate all of it. `continue-on-error` + a file guard mean a profiling failure
+  silently falls back to a normal build - it never breaks the nightly. The profile is
+  also uploaded as an artifact. Only Linux gets PGO in snapshot, for validation.
+- **Phase 3:** enable it for released wheels in `full-ci.yml` (there the native build
+  is a separate `native_lib_build` job, so a dedicated profile job feeding the
+  artifact fits cleanly) once snapshot has proven it stable, optionally per-platform.
 
 A stale profile degrades gracefully toward the non-PGO baseline (best-effort method
 matching), so refreshing it is a tuning task, never a build blocker.
