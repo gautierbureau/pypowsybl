@@ -1621,7 +1621,7 @@ pypowsybl::JavaHandle loadNetworkFromBinaryBuffersPython(std::vector<py::buffer>
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1651,7 +1651,7 @@ py::bytes saveNetworkToBinaryBufferPython(const pypowsybl::JavaHandle& network, 
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1671,7 +1671,7 @@ void updateNetworkFromBinaryBuffersPython(const pypowsybl::JavaHandle& network, 
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }

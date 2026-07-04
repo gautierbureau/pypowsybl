@@ -41,6 +41,7 @@ dependency and a missing IPOPT solver, respectively).
 | Java | `DataframeFilter` backs its input attributes with a `HashSet` (O(1) per-column filter check instead of `List.contains`); `AbstractDataframeMapper` update loop uses an indexed inner loop instead of `updaters.forEach(lambda)` (no capturing-lambda allocation per row); `CTypeUtil.toStringMap` fills a pre-sized `HashMap`; `doubleArrToMatrix` bulk-copies via a native-order `DoubleBuffer` | `java/.../dataframe/*.java`, `java/.../commons/CTypeUtil.java`, `java/.../sensitivity/SensitivityAnalysisResultContext.java` |
 | Java+C+++Python | `ContingencyContainer.add_single_element_contingencies` registers all N-1 contingencies in a single native call (new `addSingleElementContingencies` entry point taking two parallel string arrays) instead of one `add_contingency` FFI call per element; `SecurityAnalysis`/`SensitivityAnalysis` inherit it | `java/.../security/SecurityAnalysisCFunctions.java`, `cpp/powsybl-cpp/*`, `cpp/pypowsybl-cpp/bindings.cpp`, `pypowsybl/security/impl/contingency_container.py` |
 | C++ (concurrency) | `GraalVmGuard` keeps each worker thread attached to the isolate for its lifetime (thread_local, detach at thread exit) instead of attach/detach per call; dropped the redundant per-call `loggerMutex_` (GIL already serializes `logger_`); released the GIL for `run_loadflow_validation`, `run_voltage_initializer`, `update_network_from_binary_buffers` (long native calls that were blocking all Python threads); `run_loadflow_async` no longer releases the GIL (its `Py_INCREF` must run under the GIL) | `cpp/powsybl-cpp/powsybl-cpp.{cpp,h}`, `cpp/pypowsybl-cpp/pylogging.{cpp,h}`, `cpp/pypowsybl-cpp/bindings.cpp` |
+| C++ (cleanups) | parameter-map loops iterate by `const auto&` instead of copying each `std::pair` per iteration (~8 sites); `arrayToStringVectorVector` reserves and `std::move`s its sublists; `convertDataframeMetadata` reserves and `emplace_back`s | `cpp/pypowsybl-cpp/bindings.cpp`, `cpp/powsybl-cpp/powsybl-cpp.cpp` |
 
 ## Outstanding
 
@@ -75,17 +76,20 @@ dependency and a missing IPOPT solver, respectively).
 
 ### Lower value
 
-- `UpdatingDataframe` getters allocate an `Optional` per row in `getItem`
-  implementations (`java/.../dataframe/`).
+These were assessed and intentionally deferred - the gain does not justify the
+churn or they cannot be validated here:
+
+- `UpdatingDataframe.getStringValue`/`getIntValue` allocate an `Optional` per row.
+  Removing that would change the interface and its ~40 diverse callers
+  (`.orElse`, `.orElseThrow`, `.stream()`, ...) for a tiny short-lived
+  allocation - high churn, low gain.
 - `Util.createDoubleArray`/`createIntegerArray` box through `List<Double>` /
-  `List<Integer>` and write element-by-element; a real fix takes primitive
-  arrays (`double[]`/`int[]`) and touches all callers, so the boxing is at the
-  caller, not just here.
+  `List<Integer>`; a real fix takes primitive `double[]`/`int[]` signatures and
+  touches all callers, so the boxing is really at the caller.
 - pandapower converter uses `df.apply(..., axis=1)` for ID strings and a
-  per-generator FFI loop; vectorize the string build and batch the FFI call.
-- C++ parameter-map loops copy each pair by value at ~8 sites; use
-  `const auto&`. `arrayToStringVectorVector` / `convertDataframeMetadata` miss
-  `reserve()` / `std::move`.
+  per-generator FFI loop; a Python-only change, but pandapower cannot be
+  imported in this environment (a broken transitive Rust extension), so it
+  cannot be validated here.
 
 ## Concurrency notes
 
