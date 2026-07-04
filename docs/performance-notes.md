@@ -36,6 +36,7 @@ dependency and a missing IPOPT solver, respectively).
 | Python | `get_sensitivity_matrix`: fast path returns the matrix untouched when there are no zone-transfer (`TO_REMOVE`) rows, skipping a per-row Python loop and the unconditional full-matrix `df.drop` copy (called once per contingency) | `pypowsybl/sensitivity/impl/sensitivity_analysis_result.py` |
 | Python | `SecurityAnalysisResult.limit_violations` built lazily on first access instead of eagerly in `__init__` (FFI + DataFrame) | `pypowsybl/security/impl/security_analysis_result.py` |
 | Python | dynamic `SimulationResult` uses vectorized `pd.to_datetime` instead of a per-timestep `pd.Timestamp` map + 3-step index rebuild; `NodeBreakerTopology.create_graph` builds node/edge lists from column arrays via `zip` instead of `iterrows` | `pypowsybl/dynamic/impl/simulation_result.py`, `pypowsybl/network/impl/node_breaker_topology.py` |
+| Python (OPF) | model build/write-back loops use `itertuples` instead of `iterrows` (no per-row Series); every per-row `logger.log(TRACE_LEVEL, f"...")` is now guarded by `logger.isEnabledFor(TRACE_LEVEL)` so the f-string is not built when TRACE is disabled | `pypowsybl/opf/impl/model/*.py`, `pypowsybl/opf/impl/bounds/*.py`, `pypowsybl/opf/impl/constraints/*.py` |
 
 ## Outstanding
 
@@ -72,9 +73,6 @@ dependency and a missing IPOPT solver, respectively).
 
 ### Lower value
 
-- OPF model build/write-back uses `iterrows()` in ~10 places where `itertuples`
-  or vectorization would do, and evaluates `logger.log(TRACE, f"...")` per row
-  even when TRACE is disabled (`pypowsybl/opf/impl/model/*.py`).
 - `AbstractDataframeMapper` allocates a capturing lambda per row in the update
   loop; `UpdatingDataframe` getters allocate an `Optional` per row
   (`java/.../dataframe/`).

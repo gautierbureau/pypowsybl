@@ -25,15 +25,17 @@ class VscCsPowerBounds(VariableBounds):
         for vsc_cs_num, row in enumerate(cast(list[ConverterStationRow], network_cache.vsc_converter_stations.itertuples())):
             if row.bus_id:
                 p_bounds = Bounds(-row.max_p, row.max_p).mirror()
-                logger.log(TRACE_LEVEL,
-                           f"Add active power bounds {p_bounds} to VSC converter station '{row.Index}' (num={vsc_cs_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL,
+                               f"Add active power bounds {p_bounds} to VSC converter station '{row.Index}' (num={vsc_cs_num})")
                 model.set_variable_bounds(variable_context.vsc_cs_p_vars[vsc_cs_num],
                                           *Bounds.fix(row.Index, p_bounds.min_value, p_bounds.max_value))
 
                 q_bounds = Bounds.get_reactive_power_bounds(row).reduce(
                     parameters.reactive_bounds_reduction).mirror()
-                logger.log(TRACE_LEVEL,
-                           f"Add reactive power bounds {q_bounds} to VSC converter station '{row.Index}' (num={vsc_cs_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL,
+                               f"Add reactive power bounds {q_bounds} to VSC converter station '{row.Index}' (num={vsc_cs_num})")
                 if abs(q_bounds.max_value - q_bounds.min_value) < 1.0 / network_cache.network.nominal_apparent_power:
                     logger.error(
                         f"Too small reactive power bounds {q_bounds} for VSC converter station '{row.Index}' (num={vsc_cs_num})")
