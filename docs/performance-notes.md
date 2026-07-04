@@ -105,6 +105,33 @@ dependency and a missing IPOPT solver, respectively).
   `const auto&`. `arrayToStringVectorVector` / `convertDataframeMetadata` miss
   `reserve()` / `std::move`.
 
+## Build & runtime tuning (GraalVM native-image)
+
+These are build- and deploy-time knobs, orthogonal to the code changes above -
+they speed up (or slow down) the whole native library without touching the code.
+Config lives in `cpp/pypowsybl-java/CMakeLists.txt`.
+
+- **Optimization level.** `-Ob` (quick build, less optimized runtime) is applied
+  only for `CMAKE_BUILD_TYPE=Debug`. Release builds (and the shipped wheels) use
+  native-image's default `-O2` (full optimization) - so nothing is accidentally
+  under-optimized. Do not benchmark a Debug build.
+- **`-march`.** The build uses `-march=compatibility` so one wheel runs on any
+  x86-64 CPU. For a known-hardware / on-prem build, `-march=native` lets
+  native-image emit host-specific SIMD/AVX - a free speedup on numeric paths, at
+  the cost of a non-portable binary. Build-time only.
+- **Profile-Guided Optimization (PGO).** Not currently used. Oracle GraalVM can
+  instrument the image, run a representative workload to collect a profile, then
+  rebuild with `--pgo=<profile>`, typically yielding a further ~10-30% runtime
+  improvement. It requires the two-pass profiling workflow and Oracle GraalVM
+  (not GraalVM CE). This is likely the single biggest untapped runtime lever, but
+  it is a distribution/build-pipeline decision, not a code change.
+- **Garbage collector.** `--gc=G1` on Linux x86-64, `serial` elsewhere (G1 is
+  only supported there). G1 is the throughput-oriented choice for large heaps.
+- **Runtime heap/GC** can be tuned per-process via the `GRAALVM_OPTIONS`
+  environment variable (e.g. `GRAALVM_OPTIONS="-Xmx4G"`), see
+  `docs/user_guide/advanced_parameters.rst`. Matters for very large networks /
+  memory pressure.
+
 ## Notes
 
 - Fast C++-only rebuild: the native library (`libpypowsybl-java.so`) only needs
@@ -112,7 +139,10 @@ dependency and a missing IPOPT solver, respectively).
   with `-DBUILD_PYPOWSYBL_JAVA=OFF` pointing at a pre-built native lib
   (`PYPOWSYBL_NATIVE_BUILD_DIR`, or the extracted `dist/binaries.zip`) and
   rebuild just the extension — seconds instead of minutes.
-- Performance claims here are from code analysis, not yet from a benchmark
-  harness. Quantifying the wins (grid2op stepping loop, large `update_*`, large
-  `get_*`) is a natural next step and would help prioritize the outstanding
-  items.
+- The implemented items were measured on the PEGASE 13k MATPOWER network
+  (`case13659pegase`: 13,659 buses, 4,092 generators, 14,738 lines) against the
+  pre-branch baseline, both full Release native builds. Representative medians:
+  repeated small `update_*` in a loop ~11.5x faster (metadata cache), bulk
+  kwargs `update_*` ~1.4x, string-heavy reads (`get_buses`/`get_2wt`/`get_lines`)
+  ~1.2-1.3x; numeric-only reads gain ~1.05x. All measured operations improved,
+  no regressions.
