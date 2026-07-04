@@ -355,7 +355,7 @@ void voltageInitializerBinding(py::module_& m) {
     m.def("voltage_initializer_set_penalty_voltage_target_ratio", &pypowsybl::voltageInitializerSetPenaltyVoltageTargetRatio, py::arg("params_handle"), py::arg("penalty_voltage_target_ratio"));
     m.def("voltage_initializer_set_penalty_voltage_target_data", &pypowsybl::voltageInitializerSetPenaltyVoltageTargetData, py::arg("params_handle"), py::arg("penalty_voltage_target_data"));
 
-    m.def("run_voltage_initializer", &pypowsybl::runVoltageInitializer, py::arg("debug"), py::arg("network_handle"), py::arg("params_handle"));
+    m.def("run_voltage_initializer", &pypowsybl::runVoltageInitializer, py::call_guard<py::gil_scoped_release>(), py::arg("debug"), py::arg("network_handle"), py::arg("params_handle"));
 
     m.def("voltage_initializer_set_log_level_ampl", &pypowsybl::voltageInitializerSetLogLevelAmpl, py::arg("params_handle"), py::arg("log_level_ampl"));
     m.def("voltage_initializer_set_log_level_solver", &pypowsybl::voltageInitializerSetLogLevelSolver, py::arg("params_handle"), py::arg("log_level_solver"));
@@ -552,6 +552,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
           py::arg("network"), py::arg("file"), py::arg("parameters"), py::arg("post_processors"), py::arg("report_node"));
 
     m.def("update_network_from_binary_buffers", updateNetworkFromBinaryBuffersPython, "Update a network from a list of binary buffers",
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("network"), py::arg("buffers"), py::arg("parameters"), py::arg("post_processors"), py::arg("report_node"));
 
     m.def("save_network", &pypowsybl::saveNetwork, "Save network to a file in a given format", py::call_guard<py::gil_scoped_release>(),
@@ -720,11 +721,14 @@ PYBIND11_MODULE(_pypowsybl, m) {
     m.def("run_loadflow", &pypowsybl::runLoadFlow, "Run a load flow", py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"));
 
-    m.def("run_loadflow_async", &runLoadFlowAsyncPython, "Run a load flow asynchronously", py::call_guard<py::gil_scoped_release>(),
+    // no gil_scoped_release: runLoadFlowAsync only submits the task and returns immediately, and the body
+    // does a Py_INCREF on the future which must happen under the GIL (results are delivered later via the
+    // gil-acquiring onLoadFlowResult/onLoadFlowException callbacks)
+    m.def("run_loadflow_async", &runLoadFlowAsyncPython, "Run a load flow asynchronously",
           py::arg("network"), py::arg("variant_id"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"),
           py::arg("results_future"));
 
-    m.def("run_loadflow_validation", &pypowsybl::runLoadFlowValidation, "Run a load flow validation", py::arg("network"),
+    m.def("run_loadflow_validation", &pypowsybl::runLoadFlowValidation, "Run a load flow validation", py::call_guard<py::gil_scoped_release>(), py::arg("network"),
           py::arg("validation_type"), py::arg("validation_parameters"));
 
     py::class_<pypowsybl::SldParameters>(m, "SldParameters")
