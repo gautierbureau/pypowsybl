@@ -31,17 +31,11 @@ dependency and a missing IPOPT solver, respectively).
 | C++ | `createDataframe` bulk-copies numeric numpy columns with `memcpy` instead of an element-by-element cast to `std::vector` plus a second copy; textual/wrong-type inputs still fall through to the strict cast | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++ (correctness) | zero-copy `Series.data`/`Series.mask` numpy views anchor their `base` to the owning Series object so the `SeriesArray` buffer cannot be freed while a view is alive (`mask` previously used `py::cast` of a raw `int*`, anchoring nothing) | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++/Java | string series reduced from ~3 copies to ~1: `Series.data` builds the Python list of str directly from the `char**` (one PyUnicode per element) instead of via `std::vector<std::string>`; `toVector<std::string>` emplaces in place; `CTypeUtil.toCharPtr`/`toBytePtr` bulk-copy the UTF-8 bytes with `ByteBuffer.put` instead of a byte-at-a-time loop | `cpp/pypowsybl-cpp/bindings.cpp`, `cpp/powsybl-cpp/powsybl-cpp.cpp`, `java/.../commons/CTypeUtil.java` |
+| Python | `_create_c_dataframe` passes index arrays as numpy (no `list()` boxing) and detects bool via `dtype`; the kwargs write/read paths (`update_*`, `update_extensions`, `remove_aliases`/`remove_internal_connections`, `get_*(id=...)`) build the C dataframe directly from named arguments via `_create_c_dataframe_from_kwargs`/`_get_c_dataframe`, skipping the intermediate pandas DataFrame (an Index build + block-consolidation copy) | `pypowsybl/utils/impl/dataframes.py`, `pypowsybl/network/impl/network.py` |
 
 ## Outstanding
 
 ### High / medium value
-
-- **`_create_c_dataframe` Python-side overhead.** `pypowsybl/utils/impl/dataframes.py`
-  wraps index arrays in `list(...)` (boxing every element) although data columns
-  are passed as raw numpy arrays; the kwargs path builds a full pandas DataFrame
-  only to tear it back into columns; bool detection inspects `series.values[0]`
-  instead of `series.dtype`. Fix: pass index arrays as numpy arrays, add a
-  kwargs fast path that skips DataFrame construction, use a dtype check.
 
 - **grid2op `get_*_value` copies zero-copy buffers.** The C++ layer returns
   zero-copy memoryviews, but `pypowsybl/grid2op/impl/backend.py` wraps them in
