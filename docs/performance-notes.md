@@ -39,6 +39,7 @@ dependency and a missing IPOPT solver, respectively).
 | Python (OPF) | model build/write-back loops use `itertuples` instead of `iterrows` (no per-row Series); every per-row `logger.log(TRACE_LEVEL, f"...")` is now guarded by `logger.isEnabledFor(TRACE_LEVEL)` so the f-string is not built when TRACE is disabled | `pypowsybl/opf/impl/model/*.py`, `pypowsybl/opf/impl/bounds/*.py`, `pypowsybl/opf/impl/constraints/*.py` |
 | Java | `get_bus_breaker_topology` precomputes the bus/breaker-bus-id -> bus-view-bus map once per voltage level (O(n)) instead of the per-bus `getBusViewBus` fallback scan (O(n^2) on node-breaker voltage levels with disconnected sections) | `java/.../network/NetworkUtil.java`, `java/.../network/Dataframes.java` |
 | Java | `DataframeFilter` backs its input attributes with a `HashSet` (O(1) per-column filter check instead of `List.contains`); `AbstractDataframeMapper` update loop uses an indexed inner loop instead of `updaters.forEach(lambda)` (no capturing-lambda allocation per row); `CTypeUtil.toStringMap` fills a pre-sized `HashMap`; `doubleArrToMatrix` bulk-copies via a native-order `DoubleBuffer` | `java/.../dataframe/*.java`, `java/.../commons/CTypeUtil.java`, `java/.../sensitivity/SensitivityAnalysisResultContext.java` |
+| Java+C+++Python | `ContingencyContainer.add_single_element_contingencies` registers all N-1 contingencies in a single native call (new `addSingleElementContingencies` entry point taking two parallel string arrays) instead of one `add_contingency` FFI call per element; `SecurityAnalysis`/`SensitivityAnalysis` inherit it | `java/.../security/SecurityAnalysisCFunctions.java`, `cpp/powsybl-cpp/*`, `cpp/pypowsybl-cpp/bindings.cpp`, `pypowsybl/security/impl/contingency_container.py` |
 
 ## Outstanding
 
@@ -65,11 +66,11 @@ dependency and a missing IPOPT solver, respectively).
   needs a per-fetch precompute hook in the mapper (the column accessor is
   stateless).
 
-- **Per-element FFI contingency registration.**
-  `pypowsybl/security/impl/contingency_container.py` and
-  `pypowsybl/flowdecomposition/impl/flowdecomposition.py` call
-  `add_contingency` once per element; N-1 screening registers thousands. Needs a
-  batched native entry point.
+- **Per-element FFI contingency registration in flow decomposition.**
+  `ContingencyContainer.add_single_element_contingencies` is now batched, but
+  `pypowsybl/flowdecomposition/impl/flowdecomposition.py` still calls
+  `add_contingency_for_flow_decomposition` once per element. Needs a parallel
+  batched entry point in the flow-decomposition C functions.
 
 - **GraalVM thread attach/detach per call.** `GraalVmGuard`
   (`cpp/powsybl-cpp/powsybl-cpp.cpp`) attaches and detaches the isolate on every
