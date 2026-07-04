@@ -154,8 +154,7 @@ std::vector<std::string> toVector(array* arrayPtr) {
     strings.reserve(arrayPtr->length);
     for (int i = 0; i < arrayPtr->length; i++) {
         char** ptr = (char**) arrayPtr->ptr + i;
-        std::string str = *ptr ? *ptr : "";
-        strings.emplace_back(str);
+        strings.emplace_back(*ptr ? *ptr : ""); // construct in place, no intermediate std::string copy
     }
     return strings;
 }

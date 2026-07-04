@@ -196,6 +196,30 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
     pypowsybl::addDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
 }
 
+// Build a Python list of str directly from the char** buffer of a string series, creating each
+// PyUnicode object in a single pass. This avoids the intermediate std::vector<std::string> (one
+// std::string allocation + copy per element) that py::cast(toVector<std::string>(...)) would build
+// before copying again into the Python strings.
+py::object stringSeriesAsPyList(const series& s) {
+    const array* arr = (const array*) &s.data;
+    Py_ssize_t length = arr->length;
+    char** ptr = (char**) arr->ptr;
+    PyObject* list = PyList_New(length);
+    if (list == nullptr) {
+        throw py::error_already_set();
+    }
+    for (Py_ssize_t i = 0; i < length; i++) {
+        const char* str = ptr[i] ? ptr[i] : "";
+        PyObject* unicode = PyUnicode_FromString(str);
+        if (unicode == nullptr) {
+            Py_DECREF(list);
+            throw py::error_already_set();
+        }
+        PyList_SET_ITEM(list, i, unicode); // steals the reference
+    }
+    return py::reinterpret_steal<py::object>(list);
+}
+
 template<typename T>
 py::array seriesAsNumpyArray(const series& series, py::handle base) {
     // The numpy array is a zero-copy view over a buffer owned by the SeriesArray (freed in ~Array).
@@ -1086,7 +1110,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
                 const series& s = self.cast<const series&>();
                 switch(s.type) {
                     case 0:
-                        return py::cast(pypowsybl::toVector<std::string>((array *) & s.data));
+                        return stringSeriesAsPyList(s);
                     case 1:
                         return seriesAsNumpyArray<double>(s, self);
                     case 2:
