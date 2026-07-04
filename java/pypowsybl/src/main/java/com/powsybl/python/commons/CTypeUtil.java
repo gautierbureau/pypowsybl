@@ -19,8 +19,6 @@ import org.graalvm.word.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.IntFunction;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.powsybl.python.commons.Util.freeCharPtrArray;
 import static com.powsybl.python.commons.Util.getStringListAsPtr;
@@ -130,9 +128,11 @@ public final class CTypeUtil {
                                                   CCharPointerPointer valuesPointer, int valuesCount) {
         List<String> keys = toStringList(keysPointer, keysCount);
         List<String> values = toStringList(valuesPointer, valuesCount);
-        return IntStream.range(0, keys.size())
-                .boxed()
-                .collect(Collectors.toMap(keys::get, values::get));
+        Map<String, String> map = new HashMap<>(keys.size());
+        for (int i = 0; i < keys.size(); i++) {
+            map.put(keys.get(i), values.get(i));
+        }
+        return map;
     }
 
     public static StringMap fromStringMap(Map<String, String> stringMap) {

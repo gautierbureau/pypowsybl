@@ -131,10 +131,13 @@ public abstract class AbstractDataframeMapper<T, U, C> implements DataframeMappe
             updaters.add(updater);
         }
 
-        for (int i = 0; i < updatingDataframe.getRowCount(); i++) {
+        int rowCount = updatingDataframe.getRowCount();
+        for (int i = 0; i < rowCount; i++) {
             U item = getItem(object, updatingDataframe, i, context);
-            int itemIndex = i;
-            updaters.forEach(updater -> updater.update(itemIndex, item, context));
+            // indexed loop instead of updaters.forEach(...) to avoid allocating a capturing lambda per row
+            for (ColumnUpdater<U, C> updater : updaters) {
+                updater.update(i, item, context);
+            }
         }
     }
 
@@ -159,7 +162,7 @@ public abstract class AbstractDataframeMapper<T, U, C> implements DataframeMappe
         return switch (dataframeFilter.getAttributeFilterType()) {
             case DEFAULT_ATTRIBUTES -> mapper.getMetadata().isDefaultAttribute() || mapper.getMetadata().isIndex();
             case INPUT_ATTRIBUTES ->
-                dataframeFilter.getInputAttributes().contains(mapper.getMetadata().getName()) || mapper.getMetadata().isIndex();
+                dataframeFilter.isInputAttribute(mapper.getMetadata().getName()) || mapper.getMetadata().isIndex();
             case ALL_ATTRIBUTES -> true;
         };
     }

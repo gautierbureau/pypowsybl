@@ -379,8 +379,11 @@ public final class Dataframes {
     }
 
     private static List<BusBreakerViewBusData> getBusBreakerViewBuses(VoltageLevel voltageLevel) {
+        // precompute the bus/breaker bus id -> bus view bus map once (O(n)) instead of resolving each bus
+        // via getBusViewBus, whose fallback scans all buses of the voltage level (O(n^2) overall)
+        Map<String, Bus> busViewBusByBusBreakerBusId = NetworkUtil.buildBusViewBusByBusBreakerBusId(voltageLevel);
         return voltageLevel.getBusBreakerView().getBusStream()
-                .map(bus -> new BusBreakerViewBusData(bus, NetworkUtil.getBusViewBus(bus).orElse(null)))
+                .map(bus -> new BusBreakerViewBusData(bus, busViewBusByBusBreakerBusId.get(bus.getId())))
                 .toList();
     }
 

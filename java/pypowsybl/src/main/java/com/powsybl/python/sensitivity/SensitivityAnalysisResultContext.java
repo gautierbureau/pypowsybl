@@ -12,8 +12,10 @@ import com.powsybl.python.commons.PyPowsyblApiHeader;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.WordFactory;
 
+import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -83,9 +85,11 @@ public class SensitivityAnalysisResultContext {
             throw new IllegalArgumentException("Matrix(" + rowCount + "*" + colCount + ") is not suitable for arrays size:" + values.length);
         }
         CDoublePointer valuePtr = UnmanagedMemory.calloc(rowCount * colCount * SizeOf.get(CDoublePointer.class));
-        for (int i = 0; i < colCount * rowCount; i++) {
-            valuePtr.addressOf(i).write(values[i]);
-        }
+        // bulk copy into the native buffer (native byte order) instead of writing each double individually
+        CTypeConversion.asByteBuffer(valuePtr, rowCount * colCount * Double.BYTES)
+                .order(ByteOrder.nativeOrder())
+                .asDoubleBuffer()
+                .put(values);
         PyPowsyblApiHeader.MatrixPointer matrixPtr = UnmanagedMemory.calloc(SizeOf.get(PyPowsyblApiHeader.MatrixPointer.class));
         matrixPtr.setRowCount(rowCount);
         matrixPtr.setColumnCount(colCount);
