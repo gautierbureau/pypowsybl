@@ -144,12 +144,23 @@ Config lives in `cpp/pypowsybl-java/CMakeLists.txt`.
   x86-64 CPU. For a known-hardware / on-prem build, `-march=native` lets
   native-image emit host-specific SIMD/AVX - a free speedup on numeric paths, at
   the cost of a non-portable binary. Build-time only.
-- **Profile-Guided Optimization (PGO).** Not currently used. Oracle GraalVM can
-  instrument the image, run a representative workload to collect a profile, then
-  rebuild with `--pgo=<profile>`, typically yielding a further ~10-30% runtime
-  improvement. It requires the two-pass profiling workflow and Oracle GraalVM
-  (not GraalVM CE). This is likely the single biggest untapped runtime lever, but
-  it is a distribution/build-pipeline decision, not a code change.
+- **Profile-Guided Optimization (PGO).** Opt-in, off by default. Oracle GraalVM
+  instruments the image, runs a representative workload to collect a profile, then
+  rebuilds with `--pgo=<profile>`. The wheels already build on Oracle GraalVM
+  (`distribution: 'graalvm'` in `.github/actions/setup-before-build`), so no
+  edition change is needed. Build one locally with `scripts/build-pgo.sh`, or pass
+  `-DPYPOWSYBL_PGO_PROFILE=<profile>` (env var `PYPOWSYBL_PGO_PROFILE`) to the
+  native-image build. Measured on PEGASE 13k (PGO vs a non-PGO build from the same
+  source, same machine): **~10-16% faster** on the dataframe read/serialize paths
+  (`get_buses` ~1.3x, `get_lines`/`get_loads`/`read_all` ~1.1-1.15x), noise on the
+  small bulk-write paths, **plus a ~27% smaller native library** (177 MB -> 129 MB)
+  from profile-driven dead-code elimination - a win for everyone regardless of
+  workload. Note: GraalVM only dumps a profile from an executable, never from a
+  `--shared` library (isolate teardown / `System.exit` / signals do not trigger the
+  dump), so the harness profiles an instrumented executable driving the same Java
+  methods (`scripts/pgo/PgoWorkload.java`); PGO matches by method, so the shared
+  build's dataframe/load-flow methods are optimized while the thin C-entry-point
+  wrappers stay unmatched. A distribution/build-pipeline decision, not a code change.
 - **Garbage collector.** `--gc=G1` on Linux x86-64, `serial` elsewhere (G1 is
   only supported there). G1 is the throughput-oriented choice for large heaps.
 - **Runtime heap/GC** can be tuned per-process via the `GRAALVM_OPTIONS`
