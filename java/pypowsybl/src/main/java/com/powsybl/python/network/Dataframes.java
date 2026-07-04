@@ -36,6 +36,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static java.lang.Integer.MIN_VALUE;
 
@@ -334,9 +335,9 @@ public final class Dataframes {
     private static List<InternalConnectionContext> getNodeBreakerViewInternalConnections(VoltageLevel.NodeBreakerView nodeBreakerView) {
         List<VoltageLevel.NodeBreakerView.InternalConnection> internalConnectionContextList = IteratorUtils
                 .toList(nodeBreakerView.getInternalConnections().iterator());
-        return internalConnectionContextList.stream()
-                .map(internalConnection ->
-                        new InternalConnectionContext(internalConnection, internalConnectionContextList.indexOf(internalConnection)))
+        // index by position: indexOf() would be a linear scan per element (O(n^2) overall)
+        return IntStream.range(0, internalConnectionContextList.size())
+                .mapToObj(i -> new InternalConnectionContext(internalConnectionContextList.get(i), i))
                 .collect(Collectors.toList());
     }
 
