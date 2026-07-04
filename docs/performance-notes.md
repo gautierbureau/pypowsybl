@@ -32,6 +32,10 @@ dependency and a missing IPOPT solver, respectively).
 | C++ (correctness) | zero-copy `Series.data`/`Series.mask` numpy views anchor their `base` to the owning Series object so the `SeriesArray` buffer cannot be freed while a view is alive (`mask` previously used `py::cast` of a raw `int*`, anchoring nothing) | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++/Java | string series reduced from ~3 copies to ~1: `Series.data` builds the Python list of str directly from the `char**` (one PyUnicode per element) instead of via `std::vector<std::string>`; `toVector<std::string>` emplaces in place; `CTypeUtil.toCharPtr`/`toBytePtr` bulk-copy the UTF-8 bytes with `ByteBuffer.put` instead of a byte-at-a-time loop | `cpp/pypowsybl-cpp/bindings.cpp`, `cpp/powsybl-cpp/powsybl-cpp.cpp`, `java/.../commons/CTypeUtil.java` |
 | Python | `_create_c_dataframe` passes index arrays as numpy (no `list()` boxing) and detects bool via `dtype`; the kwargs write/read paths (`update_*`, `update_extensions`, `remove_aliases`/`remove_internal_connections`, `get_*(id=...)`) build the C dataframe directly from named arguments via `_create_c_dataframe_from_kwargs`/`_get_c_dataframe`, skipping the intermediate pandas DataFrame (an Index build + block-consolidation copy) | `pypowsybl/utils/impl/dataframes.py`, `pypowsybl/network/impl/network.py` |
+| Python | attribute-filtered `get_*` only re-slices `result[attributes]` (a full copy) when the column order actually differs from what was requested | `pypowsybl/network/impl/network.py` |
+| Python | `get_sensitivity_matrix`: fast path returns the matrix untouched when there are no zone-transfer (`TO_REMOVE`) rows, skipping a per-row Python loop and the unconditional full-matrix `df.drop` copy (called once per contingency) | `pypowsybl/sensitivity/impl/sensitivity_analysis_result.py` |
+| Python | `SecurityAnalysisResult.limit_violations` built lazily on first access instead of eagerly in `__init__` (FFI + DataFrame) | `pypowsybl/security/impl/security_analysis_result.py` |
+| Python | dynamic `SimulationResult` uses vectorized `pd.to_datetime` instead of a per-timestep `pd.Timestamp` map + 3-step index rebuild; `NodeBreakerTopology.create_graph` builds node/edge lists from column arrays via `zip` instead of `iterrows` | `pypowsybl/dynamic/impl/simulation_result.py`, `pypowsybl/network/impl/node_breaker_topology.py` |
 
 ## Outstanding
 
@@ -54,17 +58,6 @@ dependency and a missing IPOPT solver, respectively).
   bus (`java/.../network/NetworkUtil.java`, used by `NetworkDataframes.buses(true)`
   and `Dataframes.getBusBreakerViewBuses`). Fix: precompute one
   `busBreakerBusId → busViewBus` map per voltage level.
-
-- **`get_elements` double column slice.** After the native layer already
-  filtered columns, `network.py` re-slices `result[attributes]`, copying the
-  whole frame again just to enforce order. Fix: skip the copy when columns are
-  already in the requested order.
-
-- **Sensitivity matrix post-processing.**
-  `pypowsybl/sensitivity/impl/sensitivity_analysis_result.py` runs a Python row
-  loop and an unconditional full-copy `df.drop` per contingency even when there
-  is nothing to drop. Fix: precompute whether any `TO_REMOVE` rows exist; if
-  none, return the frame untouched; otherwise vectorize.
 
 - **Per-element FFI contingency registration.**
   `pypowsybl/security/impl/contingency_container.py` and
@@ -92,15 +85,8 @@ dependency and a missing IPOPT solver, respectively).
 - `Util.createDoubleArray`/`createIntegerArray` and the sensitivity
   `doubleArrToMatrix` write element-by-element and box through `List<Double>`;
   bulk-copy via buffers and take primitive arrays.
-- `SimulationResult` (dynamic) converts timestamps element-wise with
-  `index.map(lambda x: pd.Timestamp(x))`; use `pd.to_datetime`.
-- `NodeBreakerTopology.create_graph` uses `iterrows`; build node/edge lists from
-  column arrays like `BusBreakerTopology.create_graph` already does.
 - pandapower converter uses `df.apply(..., axis=1)` for ID strings and a
   per-generator FFI loop; vectorize the string build and batch the FFI call.
-- `SecurityAnalysisResult.__init__` eagerly materializes the violations
-  DataFrame even when the caller only reads `post_contingency_results`; make it
-  a lazy property.
 - C++ parameter-map loops copy each pair by value at ~8 sites; use
   `const auto&`. `arrayToStringVectorVector` / `convertDataframeMetadata` miss
   `reserve()` / `std::move`.

@@ -725,7 +725,9 @@ class Network:  # pylint: disable=too-many-public-methods
                                                                 attributes, elements_array, self._per_unit,
                                                                 self._nominal_apparent_power)
         result = create_data_frame_from_series_array(series_array)
-        if attributes:
+        # the native layer already returns exactly the requested attributes; only re-slice (a full
+        # copy) if the column order actually differs from what was asked for
+        if attributes and list(result.columns) != attributes:
             result = result[attributes]
         return result
 
