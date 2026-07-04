@@ -135,22 +135,6 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         return matrices;
     }
 
-    int getTotalNumberOfMatrixFactors(List<MatrixInfo> matrices) {
-        int count = 0;
-        for (MatrixInfo matrix : matrices) {
-            count += matrix.getColumnCount() * matrix.getRowCount();
-        }
-        return count;
-    }
-
-    int getTotalNumberOfMatrixFactorsColumns(List<MatrixInfo> matrices) {
-        int count = 0;
-        for (MatrixInfo matrix : matrices) {
-            count += matrix.getColumnCount();
-        }
-        return count;
-    }
-
     /**
      * Streams factors out of the matrix descriptions ({@link MatrixInfo}) without materializing a
      * {@code List<SensitivityFactor>}: for each matrix, resolves the variable type per row (once),
@@ -262,24 +246,47 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
 
         SensitivityFactorReader factorReader = new MatrixFactorReader(network, matrices, variableSetsById);
 
-        int baseCaseValueSize = getTotalNumberOfMatrixFactors(matrices);
+        // Single pass over the matrices: capture total factor / column counts (for allocating the
+        // result arrays), plus a sorted (offset, MatrixInfo) table indexed by factorContext for
+        // the result writer's hot-path lookup. prepareMatrices() produces matrices in strictly
+        // increasing offset order, so we can rely on natural ordering here.
+        final int matrixCount = matrices.size();
+        final MatrixInfo[] matricesArr = new MatrixInfo[matrixCount];
+        final int[] offsetTable = new int[matrixCount];
+        int baseCaseValueSize = 0;
+        int totalColumnsCount = 0;
+        for (int i = 0; i < matrixCount; i++) {
+            MatrixInfo m = matrices.get(i);
+            matricesArr[i] = m;
+            offsetTable[i] = m.getOffsetData();
+            baseCaseValueSize += m.getRowCount() * m.getColumnCount();
+            totalColumnsCount += m.getColumnCount();
+        }
+
         double[] baseCaseValues = new double[baseCaseValueSize];
         double[][] valuesByContingencyIndex = new double[contingencies.size()][baseCaseValueSize];
-
-        int totalColumnsCount = getTotalNumberOfMatrixFactorsColumns(matrices);
         double[] baseCaseReferences = new double[totalColumnsCount];
         double[][] referencesByContingencyIndex = new double[contingencies.size()][totalColumnsCount];
-
-        NavigableMap<Integer, MatrixInfo> factorIndexMatrixMap = new TreeMap<>();
-        for (MatrixInfo m : matrices) {
-            factorIndexMatrixMap.put(m.getOffsetData(), m);
-        }
 
         SensitivityResultWriter valueWriter = new SensitivityResultWriter() {
             @Override
             public void writeSensitivityValue(int factorContext, int contingencyIndex, int strategyIndex,
                                               double value, double functionReference) {
-                MatrixInfo m = factorIndexMatrixMap.floorEntry(factorContext).getValue();
+                // Locate the owning matrix without boxing factorContext to Integer or allocating a
+                // Map.Entry: the single-matrix case (common) is a direct read; otherwise binarySearch
+                // on the sorted offset table. This method is called F * (K + 1) times, so avoiding
+                // per-call allocations matters on large workloads.
+                MatrixInfo m;
+                if (matrixCount == 1) {
+                    m = matricesArr[0];
+                } else {
+                    int idx = Arrays.binarySearch(offsetTable, factorContext);
+                    if (idx < 0) {
+                        // binarySearch returns -(insertion point) - 1; floor position is that minus one.
+                        idx = -idx - 2;
+                    }
+                    m = matricesArr[idx];
+                }
 
                 int columnIdx = m.getOffsetColumn() + (factorContext - m.getOffsetData()) % m.getColumnCount();
                 if (contingencyIndex != -1) {
