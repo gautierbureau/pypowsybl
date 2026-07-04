@@ -57,6 +57,7 @@ template<typename F, typename... ARGS>
 void callJava(F f, ARGS... args) {
     GraalVmGuard guard;
     exception_handler exc;
+    exc.message = nullptr; // never rely on a callee to initialize it: a missing message must read as "no error"
 
     beginCall_(&guard, &exc);
     f(guard.thread(), args..., &exc);
@@ -70,6 +71,7 @@ template<typename T, typename F, typename... ARGS>
 T callJava(F f, ARGS... args) {
     GraalVmGuard guard;
     exception_handler exc;
+    exc.message = nullptr; // never rely on a callee to initialize it: a missing message must read as "no error"
 
     beginCall_(&guard, &exc);
     auto r = f(guard.thread(), args..., &exc);
@@ -85,8 +87,6 @@ void setPostProcessingJavaCall(std::function<void()> func);
 
 private:
 
-static PowsyblCaller* singleton_;
-static std::mutex initMutex_;
 std::function <void(GraalVmGuard* guard, exception_handler* exc)> beginCall_;
 std::function <void()> endCall_;
 

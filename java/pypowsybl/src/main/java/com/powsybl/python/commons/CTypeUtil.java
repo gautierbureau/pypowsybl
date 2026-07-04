@@ -40,10 +40,9 @@ public final class CTypeUtil {
         // pybind11 convert std::string and char* to python utf-8 string
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
         CCharPointer charPtr = UnmanagedMemory.calloc((bytes.length + 1) * SizeOf.get(CCharPointer.class));
-        for (int i = 0; i < bytes.length; ++i) {
-            charPtr.write(i, bytes[i]);
-        }
-        charPtr.write(bytes.length, (byte) 0);
+        // bulk copy instead of writing one byte at a time
+        CTypeConversion.asByteBuffer(charPtr, bytes.length).put(bytes);
+        charPtr.write(bytes.length, (byte) 0); // null terminator (calloc already zeroed it)
         return charPtr;
     }
 
@@ -52,9 +51,8 @@ public final class CTypeUtil {
             return WordFactory.nullPointer();
         }
         CCharPointer charPtr = UnmanagedMemory.calloc(bytes.length * SizeOf.get(CCharPointer.class));
-        for (int i = 0; i < bytes.length; ++i) {
-            charPtr.write(i, bytes[i]);
-        }
+        // bulk copy instead of writing one byte at a time
+        CTypeConversion.asByteBuffer(charPtr, bytes.length).put(bytes);
         return charPtr;
     }
 

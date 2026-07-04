@@ -10,15 +10,10 @@
 
 using namespace pybind11::literals;
 
-CppToPythonLogger *CppToPythonLogger::singleton_ = nullptr;
-std::mutex CppToPythonLogger::initMutex_;
-
 CppToPythonLogger* CppToPythonLogger::get() {
-    std::lock_guard<std::mutex> guard(initMutex_);
-    if (!singleton_) {
-        singleton_ = new CppToPythonLogger();
-    }
-    return singleton_;
+    // Meyers singleton: thread-safe lazy initialization without a per-call mutex lock.
+    static CppToPythonLogger instance;
+    return &instance;
 }
 
 CppToPythonLogger::CppToPythonLogger()
