@@ -37,6 +37,8 @@ dependency and a missing IPOPT solver, respectively).
 | Python | `SecurityAnalysisResult.limit_violations` built lazily on first access instead of eagerly in `__init__` (FFI + DataFrame) | `pypowsybl/security/impl/security_analysis_result.py` |
 | Python | dynamic `SimulationResult` uses vectorized `pd.to_datetime` instead of a per-timestep `pd.Timestamp` map + 3-step index rebuild; `NodeBreakerTopology.create_graph` builds node/edge lists from column arrays via `zip` instead of `iterrows` | `pypowsybl/dynamic/impl/simulation_result.py`, `pypowsybl/network/impl/node_breaker_topology.py` |
 | Python (OPF) | model build/write-back loops use `itertuples` instead of `iterrows` (no per-row Series); every per-row `logger.log(TRACE_LEVEL, f"...")` is now guarded by `logger.isEnabledFor(TRACE_LEVEL)` so the f-string is not built when TRACE is disabled | `pypowsybl/opf/impl/model/*.py`, `pypowsybl/opf/impl/bounds/*.py`, `pypowsybl/opf/impl/constraints/*.py` |
+| Java | `get_bus_breaker_topology` precomputes the bus/breaker-bus-id -> bus-view-bus map once per voltage level (O(n)) instead of the per-bus `getBusViewBus` fallback scan (O(n^2) on node-breaker voltage levels with disconnected sections) | `java/.../network/NetworkUtil.java`, `java/.../network/Dataframes.java` |
+| Java | `DataframeFilter` backs its input attributes with a `HashSet` (O(1) per-column filter check instead of `List.contains`); `AbstractDataframeMapper` update loop uses an indexed inner loop instead of `updaters.forEach(lambda)` (no capturing-lambda allocation per row); `CTypeUtil.toStringMap` fills a pre-sized `HashMap`; `doubleArrToMatrix` bulk-copies via a native-order `DoubleBuffer` | `java/.../dataframe/*.java`, `java/.../commons/CTypeUtil.java`, `java/.../sensitivity/SensitivityAnalysisResultContext.java` |
 
 ## Outstanding
 
@@ -54,11 +56,14 @@ dependency and a missing IPOPT solver, respectively).
   (`java/.../loadflow/LoadFlowCUtils.java`) re-runs per call. Same idea as the
   grid2op fix, applied to the general loadflow entry points.
 
-- **`NetworkUtil.getBusViewBus` O(B²) fallback.** For node-breaker voltage
-  levels with disconnected sections, the fallback streams all bus-view buses per
-  bus (`java/.../network/NetworkUtil.java`, used by `NetworkDataframes.buses(true)`
-  and `Dataframes.getBusBreakerViewBuses`). Fix: precompute one
-  `busBreakerBusId → busViewBus` map per voltage level.
+- **`NetworkUtil.getBusViewBus` O(B²) fallback in `buses(bus_breaker_view=True)`.**
+  The `get_bus_breaker_topology` caller is fixed (precomputed map), but the
+  network-wide `NetworkDataframes.buses(true)` `bus_id` column
+  (`java/.../network/NetworkDataframes.java`) still resolves each bus via
+  `getBusViewBus`. Its connected-terminal fast path covers most buses, so the
+  fallback only fires for buses with no connected terminal; fixing it cleanly
+  needs a per-fetch precompute hook in the mapper (the column accessor is
+  stateless).
 
 - **Per-element FFI contingency registration.**
   `pypowsybl/security/impl/contingency_container.py` and
@@ -73,16 +78,12 @@ dependency and a missing IPOPT solver, respectively).
 
 ### Lower value
 
-- `AbstractDataframeMapper` allocates a capturing lambda per row in the update
-  loop; `UpdatingDataframe` getters allocate an `Optional` per row
-  (`java/.../dataframe/`).
-- `DataframeFilter` uses `List.contains` per column for attribute filtering;
-  wrap the attributes in a `HashSet`.
-- `CTypeUtil.toStringMap` boxes indices through a stream; use a pre-sized
-  `HashMap`.
-- `Util.createDoubleArray`/`createIntegerArray` and the sensitivity
-  `doubleArrToMatrix` write element-by-element and box through `List<Double>`;
-  bulk-copy via buffers and take primitive arrays.
+- `UpdatingDataframe` getters allocate an `Optional` per row in `getItem`
+  implementations (`java/.../dataframe/`).
+- `Util.createDoubleArray`/`createIntegerArray` box through `List<Double>` /
+  `List<Integer>` and write element-by-element; a real fix takes primitive
+  arrays (`double[]`/`int[]`) and touches all callers, so the boxing is at the
+  caller, not just here.
 - pandapower converter uses `df.apply(..., axis=1)` for ID strings and a
   per-generator FFI loop; vectorize the string build and batch the FFI call.
 - C++ parameter-map loops copy each pair by value at ~8 sites; use
