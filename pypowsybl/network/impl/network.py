@@ -37,7 +37,11 @@ from pypowsybl.utils import (
     _create_properties_c_dataframe,
     _adapt_properties_kwargs,
     _get_c_dataframes,
-    path_to_str, PathOrStr
+    path_to_str, PathOrStr,
+    get_network_elements_dataframe_metadata,
+    get_network_elements_creation_dataframes_metadata,
+    get_network_extensions_dataframe_metadata,
+    get_network_extensions_creation_dataframes_metadata,
 )
 from pypowsybl.report import ReportNode
 from .bus_breaker_topology import BusBreakerTopology
@@ -711,7 +715,7 @@ class Network:  # pylint: disable=too-many-public-methods
             raise RuntimeError('parameters "all_attributes" and "attributes" are mutually exclusive')
 
         if kwargs:
-            metadata = _pp.get_network_elements_dataframe_metadata(element_type)
+            metadata = get_network_elements_dataframe_metadata(element_type)
             df = _adapt_df_or_kwargs(metadata, None, **kwargs)
             elements_array = _create_c_dataframe(df, metadata)
 
@@ -3351,7 +3355,7 @@ class Network:  # pylint: disable=too-many-public-methods
                     Arguments can be single values or any type of sequence.
                     In the case of sequences, all arguments must have the same length.
         """
-        metadata = _pp.get_network_elements_dataframe_metadata(element_type)
+        metadata = get_network_elements_dataframe_metadata(element_type)
         df = _adapt_df_or_kwargs(metadata, df, **kwargs)
         c_df = _create_c_dataframe(df, metadata)
         _pp.update_network_elements_with_series(self._handle, c_df, element_type, self._per_unit,
@@ -4378,7 +4382,7 @@ class Network:  # pylint: disable=too-many-public-methods
         Notes:
             The id column in the dataframe provides the link to the extensions parent elements
         """
-        metadata = _pp.get_network_extensions_dataframe_metadata(extension_name, table_name)
+        metadata = get_network_extensions_dataframe_metadata(extension_name, table_name)
         df = _adapt_df_or_kwargs(metadata, df, **kwargs)
         c_df = _create_c_dataframe(df, metadata)
         _pp.update_extensions(self._handle, extension_name, table_name, c_df)
@@ -4775,12 +4779,12 @@ class Network:  # pylint: disable=too-many-public-methods
 
     def _create_elements(self, element_type: ElementType, dfs: List[Optional[DataFrame]],
                          **kwargs: ArrayLike) -> None:
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(element_type)
+        metadata = get_network_elements_creation_dataframes_metadata(element_type)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_element(self._handle, c_dfs, element_type)
 
     def _create_extensions(self, extension_name: str, dfs: List[Optional[DataFrame]], **kwargs: ArrayLike) -> None:
-        metadata = _pp.get_network_extensions_creation_dataframes_metadata(extension_name)
+        metadata = get_network_extensions_creation_dataframes_metadata(extension_name)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_extensions(self._handle, c_dfs, extension_name)
 
@@ -6384,7 +6388,7 @@ class Network:  # pylint: disable=too-many-public-methods
 
                 network.remove_aliases(id='element_id', alias='alias_id')
         """
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(ElementType.ALIAS)[0]
+        metadata = get_network_elements_creation_dataframes_metadata(ElementType.ALIAS)[0]
         df = _adapt_df_or_kwargs(metadata, df, **kwargs)
         c_df = _create_c_dataframe(df, metadata)
         _pp.remove_aliases(self._handle, c_df)
@@ -6444,7 +6448,7 @@ class Network:  # pylint: disable=too-many-public-methods
                 network.remove_internal_connections(voltage_level_id='VL1', node1=3, node2=6)
 
         """
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(ElementType.INTERNAL_CONNECTION)[0]
+        metadata = get_network_elements_creation_dataframes_metadata(ElementType.INTERNAL_CONNECTION)[0]
         df = _adapt_df_or_kwargs(metadata, df, **kwargs)
         c_df = _create_c_dataframe(df, metadata)
         _pp.remove_internal_connections(self._handle, c_df)

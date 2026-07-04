@@ -18,7 +18,9 @@ from pypowsybl.utils import (
     _adapt_df_or_kwargs,
     _create_c_dataframe,
     _create_properties_c_dataframe,
-    create_data_frame_from_series_array
+    create_data_frame_from_series_array,
+    get_network_modification_metadata,
+    get_network_modification_metadata_with_element_type
 )
 from .network import Network
 
@@ -68,7 +70,7 @@ def create_line_on_line(network: Network,
         **kwargs: attributes as keyword arguments
 
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.CREATE_LINE_ON_LINE)
+    metadata = get_network_modification_metadata(NetworkModificationType.CREATE_LINE_ON_LINE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df], NetworkModificationType.CREATE_LINE_ON_LINE,
@@ -99,7 +101,7 @@ def revert_create_line_on_line(network: Network, df: Optional[DataFrame] = None,
         report_node: optionally, the reporter to be used to create an execution report, default is None (no report).
         **kwargs: attributes as keyword arguments
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.REVERT_CREATE_LINE_ON_LINE)
+    metadata = get_network_modification_metadata(NetworkModificationType.REVERT_CREATE_LINE_ON_LINE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df], NetworkModificationType.REVERT_CREATE_LINE_ON_LINE,
@@ -134,7 +136,7 @@ def connect_voltage_level_on_line(network: Network, df: Optional[DataFrame] = No
         report_node: optionally, the reporter to be used to create an execution report, default is None (no report).
         **kwargs: attributes as keyword arguments
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.CONNECT_VOLTAGE_LEVEL_ON_LINE)
+    metadata = get_network_modification_metadata(NetworkModificationType.CONNECT_VOLTAGE_LEVEL_ON_LINE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df], NetworkModificationType.CONNECT_VOLTAGE_LEVEL_ON_LINE,
@@ -162,7 +164,7 @@ def revert_connect_voltage_level_on_line(network: Network, df: Optional[DataFram
         report_node: optionally, the reporter to be used to create an execution report, default is None (no report).
         **kwargs: attributes as keyword arguments
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE)
+    metadata = get_network_modification_metadata(NetworkModificationType.REVERT_CONNECT_VOLTAGE_LEVEL_ON_LINE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df],
@@ -531,7 +533,7 @@ def _create_feeder_bay(network: Network, dfs: List[Optional[DataFrame]], element
         to the bus.
 
     """
-    metadata = _pp.get_network_modification_metadata_with_element_type(NetworkModificationType.CREATE_FEEDER_BAY,
+    metadata = get_network_modification_metadata_with_element_type(NetworkModificationType.CREATE_FEEDER_BAY,
                                                                        element_type)
     c_dfs = _get_c_dataframes_and_add_element_type(dfs, metadata, element_type, **kwargs)
     _pp.create_network_modification(network._handle, c_dfs, NetworkModificationType.CREATE_FEEDER_BAY, raise_exception,
@@ -566,7 +568,7 @@ def replace_tee_point_by_voltage_level_on_line(network: Network, df: Optional[Da
         It replaces 3 existing lines (with the same voltage level at one of their side (tee point)) with two new lines,
         and removes the tee point.
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE)
+    metadata = get_network_modification_metadata(NetworkModificationType.REPLACE_TEE_POINT_BY_VOLTAGE_LEVEL_ON_LINE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df],
@@ -614,7 +616,7 @@ def create_voltage_level_topology(network: Network, df: Optional[DataFrame] = No
        pp.network.create_voltage_level_topology(network=network, raise_exception=True, id='VL',
                                                 aligned_buses_or_busbar_count=3, switch_kinds='BREAKER, DISCONNECTOR')
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.VOLTAGE_LEVEL_TOPOLOGY_CREATION)
+    metadata = get_network_modification_metadata(NetworkModificationType.VOLTAGE_LEVEL_TOPOLOGY_CREATION)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     if 'switch_kinds' in df.columns:
         df['switch_kinds'] = df['switch_kinds'].map(transform_list_to_str)
@@ -667,7 +669,7 @@ def create_coupling_device(network: Network, df: Optional[DataFrame] = None, rai
                             switch_prefix_id='sw')
 
     """
-    metadata = _pp.get_network_modification_metadata(NetworkModificationType.CREATE_COUPLING_DEVICE)
+    metadata = get_network_modification_metadata(NetworkModificationType.CREATE_COUPLING_DEVICE)
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
     _pp.create_network_modification(network._handle, [c_df], NetworkModificationType.CREATE_COUPLING_DEVICE,
@@ -865,7 +867,7 @@ def create_line_bays(network: Network, df: Optional[DataFrame] = None, raise_exc
     See Also:
         :meth:`Network.create_lines`
     """
-    metadata = _pp.get_network_modification_metadata_with_element_type(NetworkModificationType.CREATE_LINE_FEEDER,
+    metadata = get_network_modification_metadata_with_element_type(NetworkModificationType.CREATE_LINE_FEEDER,
                                                                        ElementType.LINE)[0]
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
@@ -921,7 +923,7 @@ def create_2_windings_transformer_bays(network: Network, df: Optional[DataFrame]
     See Also:
         :meth:`Network.create_2_windings_transformers`
     """
-    metadata = _pp.get_network_modification_metadata_with_element_type(
+    metadata = get_network_modification_metadata_with_element_type(
         NetworkModificationType.CREATE_TWO_WINDINGS_TRANSFORMER_FEEDER, ElementType.TWO_WINDINGS_TRANSFORMER)[0]
     df = _adapt_df_or_kwargs(metadata, df, **kwargs)
     c_df = _create_c_dataframe(df, metadata)
