@@ -30,18 +30,11 @@ dependency and a missing IPOPT solver, respectively).
 | C++ (correctness) | `callJava` initializes `exception_handler::message` (was zeroed only as a side effect of the pre-hook's Java call; skipping that call exposed a wild-pointer read for callees not routed through `doCatch`, e.g. `freeString`) | `cpp/powsybl-cpp/powsybl-cpp.h` |
 | C++ | `createDataframe` bulk-copies numeric numpy columns with `memcpy` instead of an element-by-element cast to `std::vector` plus a second copy; textual/wrong-type inputs still fall through to the strict cast | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++ (correctness) | zero-copy `Series.data`/`Series.mask` numpy views anchor their `base` to the owning Series object so the `SeriesArray` buffer cannot be freed while a view is alive (`mask` previously used `py::cast` of a raw `int*`, anchoring nothing) | `cpp/pypowsybl-cpp/bindings.cpp` |
+| C++/Java | string series reduced from ~3 copies to ~1: `Series.data` builds the Python list of str directly from the `char**` (one PyUnicode per element) instead of via `std::vector<std::string>`; `toVector<std::string>` emplaces in place; `CTypeUtil.toCharPtr`/`toBytePtr` bulk-copy the UTF-8 bytes with `ByteBuffer.put` instead of a byte-at-a-time loop | `cpp/pypowsybl-cpp/bindings.cpp`, `cpp/powsybl-cpp/powsybl-cpp.cpp`, `java/.../commons/CTypeUtil.java` |
 
 ## Outstanding
 
 ### High / medium value
-
-- **String series copied 3× on the read path.** `toVector<std::string>`
-  (`cpp/powsybl-cpp/powsybl-cpp.cpp`) copies each string twice in C++ before
-  pybind's third copy into `PyUnicode`; on the Java side `CTypeUtil.toCharPtr`
-  (`java/.../commons/CTypeUtil.java`) writes each string byte-at-a-time. This
-  runs for every string cell of every dataframe. Fix: build the `py::list`
-  directly from the `char**` in the `Series.data` type-0 case, and bulk-copy on
-  the Java side with `CTypeConversion.asByteBuffer(...).put(bytes)`.
 
 - **`_create_c_dataframe` Python-side overhead.** `pypowsybl/utils/impl/dataframes.py`
   wraps index arrays in `list(...)` (boxing every element) although data columns
