@@ -1593,6 +1593,12 @@ void addContingencyForFlowDecomposition(const JavaHandle& flowDecompositionConte
     PowsyblCaller::get()->callJava(::addContingencyForFlowDecomposition, flowDecompositionContext, (char*) contingencyId.data(), elementIdPtr.get(), elementsIds.size());
 }
 
+void addSingleElementContingenciesForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds) {
+    ToCharPtrPtr contingencyIdPtr(contingencyIds);
+    ToCharPtrPtr elementIdPtr(elementIds);
+    PowsyblCaller::get()->callJava(::addSingleElementContingenciesForFlowDecomposition, flowDecompositionContext, contingencyIdPtr.get(), elementIdPtr.get(), contingencyIds.size());
+}
+
 void addPrecontingencyMonitoredElementsForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::vector<std::string>& branchIds) {
     ToCharPtrPtr branchIdPtr(branchIds);
     PowsyblCaller::get()->callJava(::addPrecontingencyMonitoredElementsForFlowDecomposition, flowDecompositionContext, branchIdPtr.get(), branchIds.size());
