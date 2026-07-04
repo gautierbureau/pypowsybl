@@ -189,6 +189,23 @@ public final class SecurityAnalysisCFunctions {
         });
     }
 
+    @CEntryPoint(name = "addSingleElementContingencies")
+    public static void addSingleElementContingencies(IsolateThread thread, ObjectHandle contingencyContainerHandle,
+                                                     CCharPointerPointer contingencyIdPtrPtr, CCharPointerPointer elementIdPtrPtr,
+                                                     int count, PyPowsyblApiHeader.ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                ContingencyContainer contingencyContainer = ObjectHandles.getGlobal().get(contingencyContainerHandle);
+                List<String> contingencyIds = toStringList(contingencyIdPtrPtr, count);
+                List<String> elementIds = toStringList(elementIdPtrPtr, count);
+                for (int i = 0; i < count; i++) {
+                    contingencyContainer.addContingency(contingencyIds.get(i), List.of(elementIds.get(i)));
+                }
+            }
+        });
+    }
+
     @CEntryPoint(name = "addContingencyFromJsonFile")
     public static void addContingencyFromJsonFile(IsolateThread thread, ObjectHandle contingencyContainerHandle, CCharPointer jsonFilePath,
                                            PyPowsyblApiHeader.ExceptionHandlerPointer exceptionHandlerPtr) {

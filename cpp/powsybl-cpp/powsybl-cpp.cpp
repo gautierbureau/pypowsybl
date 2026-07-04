@@ -1120,6 +1120,12 @@ void addContingency(const JavaHandle& analysisContext, const std::string& contin
     PowsyblCaller::get()->callJava(::addContingency, analysisContext, (char*) contingencyId.data(), elementIdPtr.get(), elementsIds.size());
 }
 
+void addSingleElementContingencies(const JavaHandle& analysisContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds) {
+    ToCharPtrPtr contingencyIdPtr(contingencyIds);
+    ToCharPtrPtr elementIdPtr(elementIds);
+    PowsyblCaller::get()->callJava(::addSingleElementContingencies, analysisContext, contingencyIdPtr.get(), elementIdPtr.get(), contingencyIds.size());
+}
+
 void addContingencyFromJsonFile(const JavaHandle& analysisContext, const std::string& jsonFilePath) {
     PowsyblCaller::get()->callJava(::addContingencyFromJsonFile, analysisContext, (char*) jsonFilePath.data());
 }

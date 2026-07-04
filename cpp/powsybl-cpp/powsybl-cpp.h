@@ -798,6 +798,8 @@ JavaHandle createSecurityAnalysis();
 
 void addContingency(const JavaHandle& analysisContext, const std::string& contingencyId, const std::vector<std::string>& elementsIds);
 
+void addSingleElementContingencies(const JavaHandle& analysisContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds);
+
 void addContingencyFromJsonFile(const JavaHandle& analysisContext, const std::string& jsonFilePath);
 
 void exportToJson(const JavaHandle& securityAnalysisResult, const std::string& jsonFilePath);
