@@ -60,6 +60,11 @@ public final class PgoWorkload {
         DataframeElementType.VOLTAGE_LEVEL,
         DataframeElementType.SUBSTATION,
         DataframeElementType.SHUNT_COMPENSATOR,
+        // Generic catch-all mappers (get_injections / get_branches / get_terminals) - frequently
+        // pulled by users and among the hotter serialization paths, so worth profiling too.
+        DataframeElementType.INJECTION,
+        DataframeElementType.BRANCH,
+        DataframeElementType.TERMINAL,
     };
 
     public static void main(String[] args) {

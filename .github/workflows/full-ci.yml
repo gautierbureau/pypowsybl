@@ -14,8 +14,58 @@ on:
 permissions: { }
 
 jobs:
+  # Profile-Guided Optimization (Phase 3). Generate one profile on Linux (GraalVM only dumps a
+  # profile from an executable, never from a --shared library) and share it as an artifact; every
+  # native_lib_build platform consumes it via --pgo. Profiles are method-keyed and portable, and
+  # native-image applies them best-effort, so one profile optimizes all platforms. It is fully
+  # release-safe: profiling is continue-on-error (a hiccup uploads nothing), and the wheel build
+  # retries without PGO if a --pgo build ever fails, so a release is never blocked.
+  pgo_profile:
+    name: Generate PGO profile
+    runs-on: ubuntu-latest
+    container: "quay.io/pypa/manylinux_2_28_x86_64:2026.03.09-1"
+    permissions:
+      contents: read
+    env:
+      PYTHON: /opt/python/cp310-cp310/bin/python
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: true
+
+      - name: Install Linux Packages
+        run: dnf install -y wget
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-before-build
+        with:
+          cache-prefix: pgo
+          python-already-available: 'true'
+          python-version: '3.10'
+          python-command: ${{ env.PYTHON }}
+
+      - name: Setup path
+        run: echo "/opt/python/cp310-cp310/bin/" >> $GITHUB_PATH
+
+      - name: Generate PGO profile
+        continue-on-error: true
+        run: PGO_BUILD_CMD=true scripts/build-pgo.sh
+
+      - name: Upload PGO profile
+        if: hashFiles('build/pgo/pypowsybl.iprof') != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: pgo-profile
+          retention-days: 7
+          path: build/pgo/pypowsybl.iprof
+
   native_lib_build:
     name: Build ${{ matrix.config.name }} native libraries
+    needs: pgo_profile
     runs-on: ${{ matrix.config.os }}
     container: ${{ matrix.config.container }}
     permissions:
@@ -77,33 +127,38 @@ jobs:
         if: matrix.config.name == 'linux'
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
 
-      # Profile-Guided Optimization for released Linux wheels (Phase 3). Generates a profile from an
-      # instrumented executable; the wheel build below consumes it via PYPOWSYBL_PGO_PROFILE.
-      # continue-on-error + the file guard mean a profiling hiccup silently falls back to a normal
-      # (non-PGO) build - a release is never blocked. macOS/Windows wheels are unchanged; extending
-      # PGO to them is a matrix change once cross-platform profile application is validated.
-      - name: Generate PGO profile (Linux)
-        if: matrix.config.name == 'linux'
+      # Consume the shared PGO profile (from the pgo_profile job) on every platform. Download is
+      # best-effort; if the artifact is missing the build is simply non-PGO.
+      - name: Download PGO profile
         continue-on-error: true
-        run: |
-          PGO_BUILD_CMD=true scripts/build-pgo.sh
-          if [ -f build/pgo/pypowsybl.iprof ]; then
-            echo "PYPOWSYBL_PGO_PROFILE=$(pwd)/build/pgo/pypowsybl.iprof" >> $GITHUB_ENV
-          fi
-
-      - name: Upload PGO profile (Linux)
-        if: matrix.config.name == 'linux' && hashFiles('build/pgo/pypowsybl.iprof') != ''
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: pgo-profile-${{ matrix.config.name }}
-          retention-days: 7
-          path: build/pgo/pypowsybl.iprof
+          name: pgo-profile
+          path: pgo-profile
+
+      - name: Enable PGO if profile present
+        run: |
+          if [ -f pgo-profile/pypowsybl.iprof ]; then
+            echo "PYPOWSYBL_PGO_PROFILE=$(pwd)/pgo-profile/pypowsybl.iprof" >> $GITHUB_ENV
+          fi
 
       - name: Build wheel
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.config.macosx_deployment_target }}
         run: |
-          ${{ env.PYTHON }} setup.py bdist_wheel ${{ matrix.config.bdist_wheel_args }}
+          build_wheel() { ${{ env.PYTHON }} setup.py bdist_wheel ${{ matrix.config.bdist_wheel_args }}; }
+          # If a --pgo build ever fails (e.g. a profile that native-image can't apply on this
+          # platform), retry without PGO so a release is never blocked.
+          if ! build_wheel; then
+            if [ -n "${PYPOWSYBL_PGO_PROFILE:-}" ]; then
+              echo "::warning::PGO build failed on ${{ matrix.config.name }}; retrying without PGO"
+              unset PYPOWSYBL_PGO_PROFILE
+              rm -rf build dist
+              build_wheel
+            else
+              exit 1
+            fi
+          fi
           if [ "${{ matrix.config.name }}" == "linux" ]; then
             auditwheel repair dist/*.whl
           fi
