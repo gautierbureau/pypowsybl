@@ -22,9 +22,6 @@ public:
 private:
     py::object logger_;
     std::mutex loggerMutex_;
-
-    static CppToPythonLogger* singleton_;
-    static std::mutex initMutex_;
 };
 
 void logFromJava(int level, long timestamp, char* loggerName, char* message);

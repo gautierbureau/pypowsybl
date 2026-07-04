@@ -17,6 +17,8 @@ class PYBIND11_EXPORT PyPowsyblError;
 #include "powsybl-cpp.h"
 #include "pylogging.h"
 #include <iostream>
+#include <atomic>
+#include <climits>
 
 namespace py = pybind11;
 
@@ -1514,12 +1516,22 @@ void runLoadFlowAsyncPython(const pypowsybl::JavaHandle& network, const std::str
                                               (void*) resultsFuturePtr);
 }
 
+// Log level last pushed to the Java side. The Python logger level is synced to Java before each Java
+// call, but it changes very rarely; caching the last pushed value lets us skip the extra native
+// transition into setLogLevel on every call once the level is stable. INT_MIN forces the first sync.
+static std::atomic<int> lastPushedLogLevel{INT_MIN};
+
 void setLogLevelFromPythonLogger(pypowsybl::GraalVmGuard* guard, exception_handler* exc) {
+    // Acquire the GIL before touching the logger py::object: reading it and its "level" attribute
+    // manipulates Python refcounts, which is unsafe when the caller has released the GIL.
+    py::gil_scoped_acquire acquire;
     py::object logger = CppToPythonLogger::get()->getLogger();
     if (!logger.is_none()) {
-        py::gil_scoped_acquire acquire;
-        py::object level = logger.attr("level");
-        ::setLogLevel(guard->thread(), level.cast<int>(), exc);
+        int level = logger.attr("level").cast<int>();
+        if (level != lastPushedLogLevel.load(std::memory_order_relaxed)) {
+            ::setLogLevel(guard->thread(), level, exc);
+            lastPushedLogLevel.store(level, std::memory_order_relaxed);
+        }
      }
 }
 
