@@ -73,22 +73,15 @@ public class SensitivityAnalysisResultContext {
         if (sources == null) {
             return WordFactory.nullPointer();
         }
-        double[] values = new double[matRow * matCol];
-        System.arraycopy(sources, srcPos, values, 0, values.length);
-        return doubleArrToMatrix(values, matRow, matCol);
-    }
-
-    private static PyPowsyblApiHeader.MatrixPointer doubleArrToMatrix(double[] values, int rowCount, int colCount) {
-        if (values.length != rowCount * colCount) {
-            throw new IllegalArgumentException("Matrix(" + rowCount + "*" + colCount + ") is not suitable for arrays size:" + values.length);
-        }
-        CDoublePointer valuePtr = UnmanagedMemory.calloc(rowCount * colCount * SizeOf.get(CDoublePointer.class));
-        for (int i = 0; i < colCount * rowCount; i++) {
-            valuePtr.addressOf(i).write(values[i]);
+        int cellCount = matRow * matCol;
+        // malloc (not calloc): every cell is written by the copy loop below, so zero-initializing first is wasted work.
+        CDoublePointer valuePtr = UnmanagedMemory.malloc(cellCount * SizeOf.get(CDoublePointer.class));
+        for (int i = 0; i < cellCount; i++) {
+            valuePtr.addressOf(i).write(sources[srcPos + i]);
         }
         PyPowsyblApiHeader.MatrixPointer matrixPtr = UnmanagedMemory.calloc(SizeOf.get(PyPowsyblApiHeader.MatrixPointer.class));
-        matrixPtr.setRowCount(rowCount);
-        matrixPtr.setColumnCount(colCount);
+        matrixPtr.setRowCount(matRow);
+        matrixPtr.setColumnCount(matCol);
         matrixPtr.setValues(valuePtr);
         return matrixPtr;
     }
