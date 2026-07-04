@@ -43,9 +43,12 @@ class ContingencyContainer:
             contingency_id_provider: A callable which maps elements IDs to a contingency ID.
                 If ``None``, the element ID will be used as the contingency ID for each N-1 contingency.
         """
-        for element_id in elements_ids:
-            contingency_id = contingency_id_provider(element_id) if contingency_id_provider else element_id
-            _pypowsybl.add_contingency(self._handle, contingency_id, [element_id])
+        if contingency_id_provider is None:
+            contingency_ids = elements_ids
+        else:
+            contingency_ids = [contingency_id_provider(element_id) for element_id in elements_ids]
+        # single native call for all N-1 contingencies instead of one per element
+        _pypowsybl.add_single_element_contingencies(self._handle, contingency_ids, elements_ids)
 
     def add_contingencies_from_json_file(self, path_to_json_file: str) -> None:
         """
