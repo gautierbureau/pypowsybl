@@ -19,6 +19,7 @@ class PYBIND11_EXPORT PyPowsyblError;
 #include <iostream>
 #include <atomic>
 #include <climits>
+#include <cstring>
 
 namespace py = pybind11;
 
@@ -96,23 +97,63 @@ std::shared_ptr<dataframe> createDataframe(py::list columnsValues, const std::ve
                 throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected string");
             }
         } else if (type == 1) {
-            try {
-                std::vector<double> values = py::cast<std::vector<double>>(columnsValues[indice]);
-                column->data.length = values.size();
-                column->data.ptr = pypowsybl::copyVectorDouble(values);
+            bool done = false;
+            py::object col = columnsValues[indice];
+            // Fast path: for a numeric numpy array (the common case for data columns), bulk-copy the
+            // contiguous buffer with a single memcpy instead of an element-by-element cast plus a
+            // second copy. forcecast on a numeric-kind array is a plain numeric conversion (no copy
+            // when already float64-contiguous). Textual/object data falls through to the strict cast
+            // below, which still rejects wrong types exactly as before.
+            if (py::isinstance<py::array>(col)) {
+                char kind = py::cast<py::array>(col).dtype().kind();
+                if (kind == 'f' || kind == 'i' || kind == 'u' || kind == 'b') {
+                    py::array_t<double, py::array::c_style | py::array::forcecast> values = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(col);
+                    int length = values.size();
+                    double* buffer = new double[length];
+                    std::memcpy(buffer, values.data(), length * sizeof(double));
+                    column->data.length = length;
+                    column->data.ptr = buffer;
+                    done = true;
+                }
             }
-            catch(const py::cast_error& e) {
-                throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected float");
+            if (!done) {
+                try {
+                    std::vector<double> values = py::cast<std::vector<double>>(col);
+                    column->data.length = values.size();
+                    column->data.ptr = pypowsybl::copyVectorDouble(values);
+                }
+                catch(const py::cast_error& e) {
+                    throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected float");
+                }
             }
         } else if (type == 2 || type == 3) {
-            try {
-                std::vector<int> values = py::cast<std::vector<int>>(columnsValues[indice]);
-                column->data.length = values.size();
-                column->data.ptr = pypowsybl::copyVectorInt(values);
+            bool done = false;
+            py::object col = columnsValues[indice];
+            if (py::isinstance<py::array>(col)) {
+                char kind = py::cast<py::array>(col).dtype().kind();
+                // Only integer/boolean kinds take the fast path: float inputs to an int/bool column are
+                // rejected by the strict cast below, matching the previous behavior (a float is not a
+                // valid int/bool value).
+                if (kind == 'i' || kind == 'u' || kind == 'b') {
+                    py::array_t<int, py::array::c_style | py::array::forcecast> values = py::cast<py::array_t<int, py::array::c_style | py::array::forcecast>>(col);
+                    int length = values.size();
+                    int* buffer = new int[length];
+                    std::memcpy(buffer, values.data(), length * sizeof(int));
+                    column->data.length = length;
+                    column->data.ptr = buffer;
+                    done = true;
+                }
             }
-            catch(const py::cast_error& e) {
-                std::string expected = type == 2 ? "int" : "bool";
-                throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected " + expected);
+            if (!done) {
+                try {
+                    std::vector<int> values = py::cast<std::vector<int>>(col);
+                    column->data.length = values.size();
+                    column->data.ptr = pypowsybl::copyVectorInt(values);
+                }
+                catch(const py::cast_error& e) {
+                    std::string expected = type == 2 ? "int" : "bool";
+                    throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected " + expected);
+                }
             }
         }
     }
