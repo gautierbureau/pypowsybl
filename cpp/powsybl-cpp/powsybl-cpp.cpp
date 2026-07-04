@@ -304,14 +304,16 @@ void providerParametersFromCStruct(provider_parameters& providerParams, std::vec
 
 std::vector<std::vector<std::string>> arrayToStringVectorVector(array nestedStringVector) {
     std::vector<std::vector<std::string>> mainList;
+    mainList.reserve(nestedStringVector.length);
     for (int i = 0; i < nestedStringVector.length; i++) {
-        std::vector<std::string> subList;
         array value = *((array*) nestedStringVector.ptr + i);
+        std::vector<std::string> subList;
+        subList.reserve(value.length);
         for (int j = 0; j < value.length; j++) {
             char* subValue = *((char**) value.ptr + j);
             subList.push_back(std::string(subValue));
         }
-        mainList.push_back(subList);
+        mainList.push_back(std::move(subList));
     }
     return mainList;
 }
@@ -857,7 +859,7 @@ JavaHandle loadNetwork(const std::string& file, const std::map<std::string, std:
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -875,7 +877,7 @@ JavaHandle loadNetworkFromString(const std::string& fileName, const std::string&
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -894,7 +896,7 @@ void updateNetwork(const JavaHandle& network, const std::string& file, const std
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -912,7 +914,7 @@ void saveNetwork(const JavaHandle& network, const std::string& file, const std::
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -927,7 +929,7 @@ std::string saveNetworkToString(const JavaHandle& network, const std::string& fo
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1419,9 +1421,10 @@ void updateNetworkElementsWithSeries(pypowsybl::JavaHandle network, dataframe* d
 
 std::vector<SeriesMetadata> convertDataframeMetadata(dataframe_metadata* dataframeMetadata) {
     std::vector<SeriesMetadata> res;
+    res.reserve(dataframeMetadata->attributes_count);
     for (int i = 0; i < dataframeMetadata->attributes_count; i++) {
         const series_metadata& series = dataframeMetadata->attributes_metadata[i];
-        res.push_back(SeriesMetadata(series.name, series.type, series.is_index, series.is_modifiable, series.is_default));
+        res.emplace_back(series.name, series.type, series.is_index, series.is_modifiable, series.is_default);
     }
     return res;
 }
