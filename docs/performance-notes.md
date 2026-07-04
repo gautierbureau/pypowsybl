@@ -40,6 +40,7 @@ dependency and a missing IPOPT solver, respectively).
 | Java | `get_bus_breaker_topology` precomputes the bus/breaker-bus-id -> bus-view-bus map once per voltage level (O(n)) instead of the per-bus `getBusViewBus` fallback scan (O(n^2) on node-breaker voltage levels with disconnected sections) | `java/.../network/NetworkUtil.java`, `java/.../network/Dataframes.java` |
 | Java | `DataframeFilter` backs its input attributes with a `HashSet` (O(1) per-column filter check instead of `List.contains`); `AbstractDataframeMapper` update loop uses an indexed inner loop instead of `updaters.forEach(lambda)` (no capturing-lambda allocation per row); `CTypeUtil.toStringMap` fills a pre-sized `HashMap`; `doubleArrToMatrix` bulk-copies via a native-order `DoubleBuffer` | `java/.../dataframe/*.java`, `java/.../commons/CTypeUtil.java`, `java/.../sensitivity/SensitivityAnalysisResultContext.java` |
 | Java+C+++Python | `ContingencyContainer.add_single_element_contingencies` registers all N-1 contingencies in a single native call (new `addSingleElementContingencies` entry point taking two parallel string arrays) instead of one `add_contingency` FFI call per element; `SecurityAnalysis`/`SensitivityAnalysis` inherit it | `java/.../security/SecurityAnalysisCFunctions.java`, `cpp/powsybl-cpp/*`, `cpp/pypowsybl-cpp/bindings.cpp`, `pypowsybl/security/impl/contingency_container.py` |
+| C++ (concurrency) | `GraalVmGuard` keeps each worker thread attached to the isolate for its lifetime (thread_local, detach at thread exit) instead of attach/detach per call; dropped the redundant per-call `loggerMutex_` (GIL already serializes `logger_`); released the GIL for `run_loadflow_validation`, `run_voltage_initializer`, `update_network_from_binary_buffers` (long native calls that were blocking all Python threads); `run_loadflow_async` no longer releases the GIL (its `Py_INCREF` must run under the GIL) | `cpp/powsybl-cpp/powsybl-cpp.{cpp,h}`, `cpp/pypowsybl-cpp/pylogging.{cpp,h}`, `cpp/pypowsybl-cpp/bindings.cpp` |
 
 ## Outstanding
 
@@ -72,11 +73,6 @@ dependency and a missing IPOPT solver, respectively).
   `add_contingency_for_flow_decomposition` once per element. Needs a parallel
   batched entry point in the flow-decomposition C functions.
 
-- **GraalVM thread attach/detach per call.** `GraalVmGuard`
-  (`cpp/powsybl-cpp/powsybl-cpp.cpp`) attaches and detaches the isolate on every
-  call from a non-main thread (e.g. a `ThreadPoolExecutor` running loadflows).
-  Fix: cache the attachment in a `thread_local` that detaches at thread exit.
-
 ### Lower value
 
 - `UpdatingDataframe` getters allocate an `Optional` per row in `getItem`
@@ -90,6 +86,39 @@ dependency and a missing IPOPT solver, respectively).
 - C++ parameter-map loops copy each pair by value at ~8 sites; use
   `const auto&`. `arrayToStringVectorVector` / `convertDataframeMetadata` miss
   `reserve()` / `std::move`.
+
+## Concurrency notes
+
+A concurrency/lock-contention audit of the call path produced the C++ fixes
+above. Remaining concurrency items, none of which are code bugs on the default
+single-threaded usage:
+
+- **Same-`Network` multithread contract (correctness footgun, docs-worthy).**
+  `allow_variant_multi_thread_access` defaults to `False`. Two threads calling
+  `run_loadflow`/`update_*`/reads on the **same** `Network` handle race on the
+  shared working variant and its mutable state. The safe pattern for parallel
+  computation is either one `Network` per thread/process (what grid2op does via
+  pickling), or load with `allow_variant_multi_thread_access=True` and have each
+  thread `clone_variant` + `set_working_variant` to its own variant before
+  computing (that flag makes the *working-variant index* thread-local; it does
+  not make concurrent mutation of the *same* variant safe). Worth documenting
+  prominently in the network API.
+- **grid2op `Backend` `_default_c_lf_params`** is mutated in place (`p.dc = dc`);
+  safe for the intended one-`Backend`-per-thread/process usage, a race only if a
+  single `Backend` is driven from multiple threads with different `dc`.
+- **`PyPowsyblConfiguration` static fields** (`java/.../commons/`) are plain
+  (non-`volatile`) statics; set once at startup in practice, but make them
+  `volatile` if runtime reconfiguration from other threads is ever supported.
+- **`CommonObjects.getComputationManager()`** shares one `LocalComputationManager`
+  (and its ForkJoinPool) across concurrent analyses. Thread-safe, but a shared
+  bounded pool caps throughput when many analyses offload work; a per-analysis
+  computation manager would lift that ceiling.
+
+Already verified thread-safe (do not touch): the two Meyers singletons, the
+`lastPushedLogLevel` atomic (benign relaxed race), `GraalVmGuard` nested-call
+detection, GIL release on all the major computations, the static
+`DataframeMapper` registries (built once, read-only), and the `functools.lru_cache`
+metadata memoization (CPython locks it internally).
 
 ## Build & runtime tuning (GraalVM native-image)
 

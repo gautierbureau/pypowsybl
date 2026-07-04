@@ -15,30 +15,52 @@ namespace pypowsybl {
 graal_isolate_t* isolate = nullptr;
 std::vector<char*> argv;
 
+namespace {
+
+// Keeps the calling thread attached to the isolate for its whole lifetime instead of attaching and
+// detaching on every call. The first call on a thread resolves its isolate thread (attaching it if it
+// is not already attached - the main thread is attached once at init); the thread is detached when it
+// exits, via this thread_local's destructor. Attaching/detaching the isolate per call is one of the
+// most expensive GraalVM operations and shows up on multithreaded workloads (thread pools running load
+// flows, RL env threads).
+class IsolateThreadAttachment {
+public:
+    graal_isolatethread_t* getOrAttach() {
+        if (thread_ == nullptr) {
+            thread_ = graal_get_current_thread(isolate);
+            if (thread_ == nullptr) {
+                int c = graal_attach_thread(isolate, &thread_);
+                if (c != 0) {
+                    throw std::runtime_error("graal_attach_thread error: " + std::to_string(c));
+                }
+                ownsAttachment_ = true;
+            }
+        }
+        return thread_;
+    }
+
+    ~IsolateThreadAttachment() {
+        // best effort, and never throw from a thread-exit destructor; only detach threads we attached
+        // ourselves (never the main thread, which was attached at init)
+        if (ownsAttachment_ && thread_ != nullptr && isolate != nullptr) {
+            graal_detach_thread(thread_);
+        }
+    }
+
+private:
+    graal_isolatethread_t* thread_ = nullptr;
+    bool ownsAttachment_ = false;
+};
+
+thread_local IsolateThreadAttachment isolateThreadAttachment;
+
+}
+
 GraalVmGuard::GraalVmGuard() {
     if (!isolate) {
         throw std::runtime_error("isolate has not been created");
     }
-    //if thread already attached to the isolate,
-    //we assume it's a nested call --> do nothing
-
-    thread_ = graal_get_current_thread(isolate);
-    if (thread_ == nullptr) {
-        int c = graal_attach_thread(isolate, &thread_);
-        if (c != 0) {
-            throw std::runtime_error("graal_attach_thread error: " + std::to_string(c));
-        }
-        shouldDetach = true;
-    }
-}
-
-GraalVmGuard::~GraalVmGuard() noexcept(false) {
-    if (shouldDetach) {
-        int c = graal_detach_thread(thread_);
-        if (c != 0) {
-            throw std::runtime_error("graal_detach_thread error: " + std::to_string(c));
-        }
-    }
+    thread_ = isolateThreadAttachment.getOrAttach();
 }
 PowsyblCaller* PowsyblCaller::get() {
     // Meyers singleton: thread-safe initialization guaranteed by the C++11 standard, without paying
