@@ -77,6 +77,28 @@ jobs:
         if: matrix.config.name == 'linux'
         run: echo "/opt/python/${{ matrix.python.name }}-${{ matrix.python.abi }}/bin/" >> $GITHUB_PATH
 
+      # Profile-Guided Optimization for released Linux wheels (Phase 3). Generates a profile from an
+      # instrumented executable; the wheel build below consumes it via PYPOWSYBL_PGO_PROFILE.
+      # continue-on-error + the file guard mean a profiling hiccup silently falls back to a normal
+      # (non-PGO) build - a release is never blocked. macOS/Windows wheels are unchanged; extending
+      # PGO to them is a matrix change once cross-platform profile application is validated.
+      - name: Generate PGO profile (Linux)
+        if: matrix.config.name == 'linux'
+        continue-on-error: true
+        run: |
+          PGO_BUILD_CMD=true scripts/build-pgo.sh
+          if [ -f build/pgo/pypowsybl.iprof ]; then
+            echo "PYPOWSYBL_PGO_PROFILE=$(pwd)/build/pgo/pypowsybl.iprof" >> $GITHUB_ENV
+          fi
+
+      - name: Upload PGO profile (Linux)
+        if: matrix.config.name == 'linux' && hashFiles('build/pgo/pypowsybl.iprof') != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: pgo-profile-${{ matrix.config.name }}
+          retention-days: 7
+          path: build/pgo/pypowsybl.iprof
+
       - name: Build wheel
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.config.macosx_deployment_target }}
