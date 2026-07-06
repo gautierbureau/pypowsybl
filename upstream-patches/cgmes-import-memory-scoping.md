@@ -4,29 +4,42 @@ Scoping analysis of where memory goes during CGMES import in powsybl-core,
 based on (a) a code walk of `triple-store`, `cgmes-model`, and
 `cgmes-conversion` on current `main`, and (b) empirical measurements
 (heap checkpoints, class histograms, thread-allocation counters, JFR
-allocation profiling) of the SmallGrid NodeBreaker conformity case
-(EQ+SSH+SV+TP + boundary, **4.85 MB of XML**) against powsybl-core 7.2.1
-jars on a HotSpot JVM (GraalVM JDK 21).
+allocation profiling) against powsybl-core 7.2.1 jars on a HotSpot JVM
+(GraalVM JDK 21), on two cases:
 
-## Headline numbers (SmallGrid, 4.85 MB input)
+- **SmallGrid** NodeBreaker conformity case (EQ+SSH+SV+TP + boundary,
+  **4.85 MB** of XML, ~59 k triples);
+- **PEGASE 13k** — the 13 659-bus / 20 467-branch PEGASE case
+  (MATPOWER → IIDM → CGMES export), bus-branch EQ+SSH+SV+TP,
+  **104.5 MB** of XML, **1 424 167 triples**. This is the
+  production-scale reference.
 
-| Metric | Value | Ratio vs input |
-|---|---|---|
-| Triplestore load: bytes **allocated** | 112 MB | 23× |
-| Triplestore load: **peak heap** | 94-100 MB | ~20× |
-| Triplestore **retained** (live after GC) | 13.5 MB | 2.8× |
-| Conversion: bytes **allocated** | 128 MB | 26× |
-| Conversion: peak heap | 58 MB | 12× |
-| IIDM Network retained (default params) | ~7 MB | 1.5× |
-| Network + model + context retained (both store-flags on) | 19.1 MB | 3.9× |
-| **Total allocation churn for one import** | **~240 MB** | **~50×** |
+## Headline numbers
 
-Scaling linearly, a 1 GB CGM implies ~50 GB of transient allocations
-(GC pressure — this is what makes import slow and memory-hungry even
-when the retained set fits), with a live triplestore of roughly
-2.5-3 GB held for the whole import. That is the "huge" consumption.
+| Metric | SmallGrid (4.85 MB) | PEGASE 13k (104.5 MB) | Ratio vs input (PEGASE) |
+|---|---|---|---|
+| Load: bytes **allocated** | 112 MB | 1.63-1.74 GB | 16× |
+| Load: **peak heap** | 94-100 MB | 619-707 MB | ~6.5× |
+| Triplestore **retained** (live after GC) | 13.5 MB | **267.5 MB** | 2.6× |
+| Conversion: bytes **allocated** | 128 MB | 1.97-2.01 GB | 19× |
+| Conversion: **peak heap** | 58 MB | **955-1155 MB** | ~9.5× |
+| IIDM Network retained (default params) | ~7 MB | **149 MB** | 1.4× |
+| Network + model + context retained (both store-flags on) | 19.1 MB | **428.7 MB** | 4.1× |
+| **Total allocation churn for one import** | ~240 MB | **~3.6 GB** | **~35×** |
+| Import wall-clock (load + convert) | ~2.3 s | 11-16 s | — |
 
-Import timing on this case: 1.0-1.3 s load + ~1.0 s conversion.
+The dominant experience-level costs on PEGASE 13k:
+- **Peak heap ~1 GB for a 104 MB IGM** (~9.5×) — the moment of maximum
+  pressure is *during conversion*, when the triplestore (267 MB), the
+  partially-built Network (~150 MB), the Context caches and the
+  in-flight SPARQL materializations all coexist.
+- **~3.6 GB of transient allocations** — GC pressure that dominates
+  import time.
+- Retention after import is modest by default (149 MB Network); turning
+  on the two store-as-extension flags nearly **triples** it (428 MB).
+
+A 1 GB CGM at these ratios: ~2.6 GB live triplestore, ~10 GB peak heap,
+~35 GB churn. That is the "huge" consumption.
 
 ## Where the memory goes
 
@@ -38,43 +51,51 @@ Every CGMES XML file is parsed entirely into a single
 graph per file. There is **no disk-backed option** and no option to
 skip profiles: whatever files are in the datasource are fully loaded.
 
-Class histogram of the loaded store (58 899 statements for SmallGrid,
-13.5 MB live) — dominant classes:
+Class histogram of the loaded store — PEGASE 13k (1 424 167 statements,
+267.5 MB live, **~197 bytes/statement all-in**):
 
 | Class | Instances | Bytes | Share |
 |---|---|---|---|
-| `byte[]` (String bodies) | 50 562 | 5.0 MB | 37% |
-| `MemStatement` | 58 899 | 2.4 MB | 17% |
-| `MemStatement[]` | 21 856 | 2.0 MB | 15% |
-| `MemStatementList` | 46 793 | 1.9 MB | 14% |
-| `java.lang.String` | 49 280 | 1.2 MB | 9% |
-| `AtomicReference` | 46 797 | 0.7 MB | 5% |
-| `MemIRI` + `MemLiteral` | 17 446 | 0.8 MB | 6% |
+| `MemStatement` | 1 424 167 | 57.0 MB | 21% |
+| `MemStatement[]` | 510 142 | 49.2 MB | 18% |
+| `MemStatementList` | 1 064 261 | 42.6 MB | 16% |
+| `byte[]` (String bodies) | 627 135 | 31.6 MB | 12% |
+| `AtomicReference` | 1 064 265 | 17.0 MB | 6% |
+| `java.lang.String` | 625 853 | 15.0 MB | 6% |
+| `WeakHashMap$Entry` + `WeakReference` + `SoftReference` | ~978 k | 36.2 MB | 14% |
+| `MemIRI` + `MemLiteral` | 373 180 | 16.8 MB | 6% |
 
-Two observations:
-- **String data is the single largest chunk (~46% incl. headers).**
-  rdf4j interns values in a `MemValueFactory`, so repeated IRIs are
-  shared — this is already fairly tight.
-- **~230 bytes/statement all-in.** The `MemStatementList` +
-  `MemStatement[]` + `AtomicReference` triplet (~4.6 MB here) is rdf4j
-  5.x's per-value statement-list indexing — the price of SPARQL-queryable
+Three observations:
+- **The per-value statement-list indexing machinery
+  (`MemStatementList` + `MemStatement[]` + `AtomicReference`) is the
+  single biggest bucket: ~109 MB, 41% — nearly 2× the statement objects
+  themselves.** This is rdf4j 5.x's price for SPARQL-queryable
   in-memory storage.
+- **The value factory's weak/soft interning registry costs another
+  ~36 MB (14%)** (`WeakHashMap$Entry`/`WeakReference`/`SoftReference`
+  around interned `MemIRI`/`MemLiteral` values).
+- String data proper is ~47 MB (18%) on PEGASE. (On the small,
+  string-heavy SmallGrid case strings were ~46% — profile mix matters,
+  but structure dominates at scale.)
 
-### 2. Allocation churn (the 50×)
+### 2. Allocation churn (the ~35×)
 
-JFR allocation-by-site for the full import:
+JFR allocation-by-site for the full PEGASE 13k import (~3.7 GB total):
 
-| Site | Share | What it is |
+| Site cluster | Share | What it is |
 |---|---|---|
-| `String.substring` | 15% | RDF/XML parsing + `Value.stringValue()` |
-| `Unsafe.allocateInstance` + `MemValueFactory$$Lambda` + `ConcurrentHashMap.initTable` | 26% | rdf4j value-factory interning machinery (weak registries) |
-| `AbstractStringBuilder.append` | 7% | IRI/string building |
-| `HashMap.putVal` + `resize` | 7% | PropertyBag population |
-| Query evaluation (`ArrayBindingSet`, `MemStatementIterator`, `StatementPatternQueryEvaluationStep`, …) | ~15% | SPARQL evaluation of the ~40-50 conversion queries |
-| `byte[]` + `String` combined (by class) | 36% | fresh strings everywhere |
+| `String.substring` + `String.getBytes` + `AbstractStringBuilder` | ~18% | RDF/XML parsing + `Value.stringValue()` + `PropertyBag.extractIdentifier` |
+| SPARQL evaluation (`ArrayBindingSet*`, `StatementPatternQueryEvaluationStep*`, `MemStatementIterator`, `createBindingSet`, `SimpleBinding`, `Value[]`) | ~25-30% | evaluating the ~40-50 conversion queries (several run 2-3×) |
+| `HashMap.putVal` + `resize` + `HashMap$Node` | ~12% | PropertyBag population per result row |
+| `ParsedIRI` + RDFXML parser internals | ~8% | per-IRI parsing during load |
+| `MemorySailStore.addStatement` + insert path | ~4% | store insertion |
+| `System.getProperty` | 2.8% (~100 MB!) | rdf4j per-iteration debug-flag check in the query-evaluation path — pure waste at this call volume |
+| `byte[]` + `String` combined (by class) | ~31% | fresh strings everywhere |
 
-Load phase (112 MB) is parser + store-insertion churn. Conversion
-phase (128 MB) is SPARQL evaluation + PropertyBags materialization.
+Load phase (~1.7 GB) is parser + store-insertion churn. Conversion
+phase (~2.0 GB) is SPARQL evaluation + PropertyBags materialization —
+at production scale the query-evaluation machinery overtakes parsing
+as the top allocator.
 
 ### 3. PropertyBags materialization
 
@@ -128,16 +149,29 @@ Plus the model-level caches (`cachedTerminals`, `cachedNodesById`, …,
   `store-cgmes-conversion-context-as-network-extension=false` — both
   default false on main and 7.x): `Conversion.convert()` calls
   `cgmes.close()` mid-flow (`Conversion.java:269-272`), shutting down
-  the rdf4j repository. Measured: heap **drops** during conversion
-  (18 MB → 11.6 MB) because the triplestore dies before `convert()`
-  returns. Only the Network (~7 MB incl. CGMES aliases/properties)
-  survives.
-- With both flags on: 19.1 MB retained vs 7.2 MB — the whole
-  triplestore + Context caches live as long as the Network
-  (`CgmesModelExtensionImpl` / `CgmesConversionContextExtensionImpl`).
+  the rdf4j repository before `convert()` returns. Only the Network
+  survives (PEGASE: 149 MB incl. CGMES aliases/properties).
+- With both flags on (PEGASE): **428.7 MB retained vs 148.9 MB
+  default** — the whole triplestore (267 MB) + Context caches live as
+  long as the Network (`CgmesModelExtensionImpl` /
+  `CgmesConversionContextExtensionImpl`).
 - **pypowsybl does not set these parameters** → default (off) applies.
 - `remove-properties-and-aliases-after-import` exists to strip the
   IIDM-side CGMES property copies too (disables later SSH update).
+
+### 7. IIDM-side per-identifiable scaffolding (bonus finding)
+
+The phase-2 histogram of the converted PEGASE Network shows, alongside
+the expected element data, **104 239 `java.util.Properties` +
+104 464 `ConcurrentHashMap` + 348 998 `HashMap` + 137 369
+`LinkedHashMap`** (~38 MB of map objects before contents). IIDM's
+`AbstractIdentifiable` allocates properties/aliases containers per
+identifiable even when empty or near-empty; with CGMES imports
+attaching several aliases/properties per element this is populated,
+but the container-per-identifiable pattern is itself a measurable
+share of the 149 MB Network. This is an iidm-impl finding, not a
+CGMES one — noted here because CGMES imports are where networks with
+100 k+ identifiables typically come from.
 
 ## Ranked optimization opportunities
 
@@ -179,6 +213,11 @@ Plus the model-level caches (`cachedTerminals`, `cachedNodesById`, …,
    `cgmes-model-alternatives` module exists to benchmark query
    strategies — evidence this cost is a known concern.)
 
+7. **(Upstream rdf4j) per-iteration `System.getProperty` in query
+   evaluation** — 2.8% of all allocation pressure (~100 MB per PEGASE
+   import) from a debug-flag check inside the iteration machinery.
+   Worth reporting/patching upstream in rdf4j; zero powsybl code change.
+
 Non-findings / already-fine:
 - Post-import retention is fine by default (model closed mid-convert);
   pypowsybl inherits the good defaults.
@@ -193,7 +232,16 @@ Harness (session scratchpad, not committed):
 convert (`Conversion.convert`) → close → drop; at each phase forced GC,
 `MemoryPoolMXBean` peaks, `ThreadMXBean.getThreadAllocatedBytes`, and a
 `jcmd GC.class_histogram` dump; plus a JFR `settings=profile` run and
-`jfr view allocation-by-class` / `allocation-by-site`.
+`jfr view allocation-by-class` / `allocation-by-site`. JVM: GraalVM
+JDK 21 (HotSpot mode), `-Xmx12g` for PEGASE.
 
-Input: SmallGrid NodeBreaker BaseCase Complete (EQ+SSH+SV+TP+EQ_BD+TP_BD)
-zipped from `cgmes-conformity` main resources.
+Inputs:
+- SmallGrid NodeBreaker BaseCase Complete (EQ+SSH+SV+TP+EQ_BD+TP_BD)
+  zipped from `cgmes-conformity` main resources.
+- PEGASE 13k CGMES: `case13659pegase.m` (MATPOWER repo) → parsed to
+  MAT v5 (`scipy.io.savemat`, struct `mpc`) → imported via pypowsybl's
+  MATPOWER importer → `network.save(..., format='CGMES')` → EQ 53.8 MB
+  + SSH 16.3 MB + SV 22.0 MB + TP 12.3 MB, zipped (5.5 MB). Bus-branch
+  topology; no boundary files (self-contained IGM). Numbers above are
+  from single runs; load/convert wall-clock varied ±20% across runs,
+  byte counts ±3%.
