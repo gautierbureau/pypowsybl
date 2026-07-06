@@ -1275,6 +1275,16 @@ matrix* getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, c
                                 (char*) matrixId.c_str(), (char*) contingencyId.c_str());
 }
 
+JavaHandle runSensitivityAnalysisAdjoint(const JavaHandle& sensitivityAnalysisContext, const JavaHandle& network, const std::vector<double>& cotangents, SensitivityAnalysisParameters& parameters, const std::string& provider) {
+    auto c_parameters = parameters.to_c_struct();
+    return PowsyblCaller::get()->callJava<JavaHandle>(::runSensitivityAnalysisAdjoint, sensitivityAnalysisContext, network,
+                                (double*) cotangents.data(), (int) cotangents.size(), c_parameters.get(), (char*) provider.data());
+}
+
+matrix* getGradient(const JavaHandle& sensitivityAnalysisAdjointResultContext, const std::string& vectorId) {
+    return PowsyblCaller::get()->callJava<matrix*>(::getGradient, sensitivityAnalysisAdjointResultContext, (char*) vectorId.c_str());
+}
+
 SeriesArray* createNetworkElementsSeriesArray(const JavaHandle& network, element_type elementType, filter_attributes_type filterAttributesType, const std::vector<std::string>& attributes, dataframe* dataframe, bool perUnit, double nominalApparentPower) {
 	ToCharPtrPtr attributesPtr(attributes);
     return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::createNetworkElementsSeriesArray, network, elementType, filterAttributesType, attributesPtr.get(), attributes.size(), dataframe, perUnit, nominalApparentPower));

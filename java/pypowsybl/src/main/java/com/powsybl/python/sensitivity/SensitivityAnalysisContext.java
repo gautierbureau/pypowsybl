@@ -13,6 +13,7 @@ import com.powsybl.contingency.Contingency;
 import com.powsybl.contingency.ContingencyContext;
 import com.powsybl.contingency.ContingencyContextType;
 import com.powsybl.iidm.network.*;
+import com.powsybl.openloadflow.sensi.OpenSensitivityAnalysisProvider;
 import com.powsybl.python.commons.CommonObjects;
 import com.powsybl.python.contingency.ContingencyContainerImpl;
 import com.powsybl.sensitivity.*;
@@ -103,7 +104,9 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         }
     }
 
-    private final Map<String, MatrixInfo> factorsMatrix = new HashMap<>();
+    // LinkedHashMap: preserve matrix declaration order so the flat column layout (offsetColumn) — hence the
+    // adjoint cotangent vector alignment — is deterministic and matches the Python-side declaration order.
+    private final Map<String, MatrixInfo> factorsMatrix = new LinkedHashMap<>();
 
     void addFactorMatrix(String matrixId, List<String> branchesIds, List<String> variablesIds,
                          List<String> contingencies, ContingencyContextType contingencyContextType,
@@ -287,6 +290,68 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
                                                     valuesByContingencyId,
                                                     baseCaseReferences,
                                                     referencesByContingencyId);
+    }
+
+    /**
+     * Reverse-mode (adjoint / VJP) run: given output cotangents {@code ȳ} over the declared functions
+     * (the columns of the factor matrices, flat in offsetColumn order), returns {@code θ̄ = Sᵀ·ȳ} keyed by
+     * variable id — the reverse-mode dual of {@link #run}. Reuses the OpenLoadFlow-retained
+     * {@code networkCacheEnabled} context, so a cached AC load flow must have run on the network first.
+     *
+     * @param functionCotangents dL/dfunction, one entry per declared function column (offsetColumn layout).
+     */
+    SensitivityAnalysisAdjointResultContext runAdjoint(Network network, double[] functionCotangents,
+                                                       SensitivityAnalysisParameters sensitivityAnalysisParameters,
+                                                       String provider) {
+        List<MatrixInfo> matrices = prepareMatrices();
+        Map<String, SensitivityVariableSet> variableSetsById = variableSets.stream()
+                .collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
+
+        List<SensitivityFactor> factors = new ArrayList<>();
+        Map<String, Double> cotangentByFunctionId = new HashMap<>();
+
+        for (MatrixInfo matrix : matrices) {
+            List<String> columns = matrix.getColumnIds();
+            List<String> rows = matrix.getRowIds();
+
+            // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector
+            for (int j = 0; j < columns.size(); j++) {
+                String functionId = SensitivityFactor.resolveBusId(columns.get(j), matrix.getFunctionType(), network);
+                cotangentByFunctionId.merge(functionId, functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
+            }
+
+            // (function, variable) factors, base case only (the adjoint ignores contingencies)
+            for (String variableId : rows) {
+                SensitivityVariableType variableType = matrix.getVariableType();
+                boolean variableSet = false;
+                if (variableType == null) {
+                    variableType = getVariableType(network, variableId);
+                    if (variableType == null) {
+                        if (variableSetsById.containsKey(variableId)) {
+                            variableSet = true;
+                            variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
+                        } else {
+                            throw new PowsyblException("Variable '" + variableId + "' not found");
+                        }
+                    }
+                }
+                for (String functionId : columns) {
+                    String finalFunctionId = SensitivityFactor.resolveBusId(functionId, matrix.getFunctionType(), network);
+                    factors.add(new SensitivityFactor(matrix.getFunctionType(), finalFunctionId, variableType, variableId,
+                            variableSet, ContingencyContext.none()));
+                }
+            }
+        }
+
+        SensitivityAnalysisProvider p = SensitivityAnalysisCUtils.getSensitivityAnalysisProvider(provider);
+        if (!(p instanceof OpenSensitivityAnalysisProvider olfProvider)) {
+            throw new PowsyblException("Adjoint (VJP) sensitivity requires the OpenLoadFlow provider, got '" + p.getName() + "'");
+        }
+        Map<String, Double> gradientByVariableId = olfProvider.runAdjoint(network,
+                network.getVariantManager().getWorkingVariantId(), factors, cotangentByFunctionId, variableSets,
+                sensitivityAnalysisParameters);
+
+        return new SensitivityAnalysisAdjointResultContext(factorsMatrix, gradientByVariableId);
     }
 
 }
