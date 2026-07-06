@@ -13,6 +13,7 @@ import com.powsybl.contingency.Contingency;
 import com.powsybl.contingency.ContingencyContext;
 import com.powsybl.contingency.ContingencyContextType;
 import com.powsybl.iidm.network.*;
+import com.powsybl.openloadflow.sensi.AcSensitivityAnalysis;
 import com.powsybl.openloadflow.sensi.OpenSensitivityAnalysisProvider;
 import com.powsybl.python.commons.CommonObjects;
 import com.powsybl.python.contingency.ContingencyContainerImpl;
@@ -317,7 +318,10 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector
             for (int j = 0; j < columns.size(); j++) {
                 String functionId = SensitivityFactor.resolveBusId(columns.get(j), matrix.getFunctionType(), network);
-                cotangentByFunctionId.merge(functionId, functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
+                // key by (functionType, functionId): a branch monitored by several function types (current
+                // and active power) shares one id, so keying by id alone would merge their cotangents.
+                cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(matrix.getFunctionType(), functionId),
+                        functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
             }
 
             // (function, variable) factors, base case only (the adjoint ignores contingencies)
