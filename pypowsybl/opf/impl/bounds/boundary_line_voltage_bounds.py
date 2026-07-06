@@ -25,7 +25,8 @@ class BoundaryLineVoltageBounds(VariableBounds):
         for bl_num, row in enumerate(cast(list[BoundaryLineRow], network_cache.boundary_lines.itertuples())):
             if row.bus_id:
                 v_bounds = Bounds.get_voltage_bounds(None, None, parameters.default_voltage_bounds)
-                logger.log(TRACE_LEVEL, f"Add voltage magnitude bounds {v_bounds} to boundary line bus '{row.Index}' (num={bl_num})'")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Add voltage magnitude bounds {v_bounds} to boundary line bus '{row.Index}' (num={bl_num})'")
                 bl_index = variable_context.bl_num_2_index[bl_num]
                 model.set_variable_bounds(variable_context.bl_v_vars[bl_index],
                                           *Bounds.fix(row.Index, v_bounds.min_value, v_bounds.max_value))

@@ -31,17 +31,16 @@ dependency and a missing IPOPT solver, respectively).
 | C++ | `createDataframe` bulk-copies numeric numpy columns with `memcpy` instead of an element-by-element cast to `std::vector` plus a second copy; textual/wrong-type inputs still fall through to the strict cast | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++ (correctness) | zero-copy `Series.data`/`Series.mask` numpy views anchor their `base` to the owning Series object so the `SeriesArray` buffer cannot be freed while a view is alive (`mask` previously used `py::cast` of a raw `int*`, anchoring nothing) | `cpp/pypowsybl-cpp/bindings.cpp` |
 | C++/Java | string series reduced from ~3 copies to ~1: `Series.data` builds the Python list of str directly from the `char**` (one PyUnicode per element) instead of via `std::vector<std::string>`; `toVector<std::string>` emplaces in place; `CTypeUtil.toCharPtr`/`toBytePtr` bulk-copy the UTF-8 bytes with `ByteBuffer.put` instead of a byte-at-a-time loop | `cpp/pypowsybl-cpp/bindings.cpp`, `cpp/powsybl-cpp/powsybl-cpp.cpp`, `java/.../commons/CTypeUtil.java` |
+| Python | `_create_c_dataframe` passes index arrays as numpy (no `list()` boxing) and detects bool via `dtype`; the kwargs write/read paths (`update_*`, `update_extensions`, `remove_aliases`/`remove_internal_connections`, `get_*(id=...)`) build the C dataframe directly from named arguments via `_create_c_dataframe_from_kwargs`/`_get_c_dataframe`, skipping the intermediate pandas DataFrame (an Index build + block-consolidation copy) | `pypowsybl/utils/impl/dataframes.py`, `pypowsybl/network/impl/network.py` |
+| Python | attribute-filtered `get_*` only re-slices `result[attributes]` (a full copy) when the column order actually differs from what was requested | `pypowsybl/network/impl/network.py` |
+| Python | `get_sensitivity_matrix`: fast path returns the matrix untouched when there are no zone-transfer (`TO_REMOVE`) rows, skipping a per-row Python loop and the unconditional full-matrix `df.drop` copy (called once per contingency) | `pypowsybl/sensitivity/impl/sensitivity_analysis_result.py` |
+| Python | `SecurityAnalysisResult.limit_violations` built lazily on first access instead of eagerly in `__init__` (FFI + DataFrame) | `pypowsybl/security/impl/security_analysis_result.py` |
+| Python | dynamic `SimulationResult` uses vectorized `pd.to_datetime` instead of a per-timestep `pd.Timestamp` map + 3-step index rebuild; `NodeBreakerTopology.create_graph` builds node/edge lists from column arrays via `zip` instead of `iterrows` | `pypowsybl/dynamic/impl/simulation_result.py`, `pypowsybl/network/impl/node_breaker_topology.py` |
+| Python (OPF) | model build/write-back loops use `itertuples` instead of `iterrows` (no per-row Series); every per-row `logger.log(TRACE_LEVEL, f"...")` is now guarded by `logger.isEnabledFor(TRACE_LEVEL)` so the f-string is not built when TRACE is disabled | `pypowsybl/opf/impl/model/*.py`, `pypowsybl/opf/impl/bounds/*.py`, `pypowsybl/opf/impl/constraints/*.py` |
 
 ## Outstanding
 
 ### High / medium value
-
-- **`_create_c_dataframe` Python-side overhead.** `pypowsybl/utils/impl/dataframes.py`
-  wraps index arrays in `list(...)` (boxing every element) although data columns
-  are passed as raw numpy arrays; the kwargs path builds a full pandas DataFrame
-  only to tear it back into columns; bool detection inspects `series.values[0]`
-  instead of `series.dtype`. Fix: pass index arrays as numpy arrays, add a
-  kwargs fast path that skips DataFrame construction, use a dtype check.
 
 - **grid2op `get_*_value` copies zero-copy buffers.** The C++ layer returns
   zero-copy memoryviews, but `pypowsybl/grid2op/impl/backend.py` wraps them in
@@ -61,17 +60,6 @@ dependency and a missing IPOPT solver, respectively).
   and `Dataframes.getBusBreakerViewBuses`). Fix: precompute one
   `busBreakerBusId → busViewBus` map per voltage level.
 
-- **`get_elements` double column slice.** After the native layer already
-  filtered columns, `network.py` re-slices `result[attributes]`, copying the
-  whole frame again just to enforce order. Fix: skip the copy when columns are
-  already in the requested order.
-
-- **Sensitivity matrix post-processing.**
-  `pypowsybl/sensitivity/impl/sensitivity_analysis_result.py` runs a Python row
-  loop and an unconditional full-copy `df.drop` per contingency even when there
-  is nothing to drop. Fix: precompute whether any `TO_REMOVE` rows exist; if
-  none, return the frame untouched; otherwise vectorize.
-
 - **Per-element FFI contingency registration.**
   `pypowsybl/security/impl/contingency_container.py` and
   `pypowsybl/flowdecomposition/impl/flowdecomposition.py` call
@@ -85,9 +73,6 @@ dependency and a missing IPOPT solver, respectively).
 
 ### Lower value
 
-- OPF model build/write-back uses `iterrows()` in ~10 places where `itertuples`
-  or vectorization would do, and evaluates `logger.log(TRACE, f"...")` per row
-  even when TRACE is disabled (`pypowsybl/opf/impl/model/*.py`).
 - `AbstractDataframeMapper` allocates a capturing lambda per row in the update
   loop; `UpdatingDataframe` getters allocate an `Optional` per row
   (`java/.../dataframe/`).
@@ -98,18 +83,38 @@ dependency and a missing IPOPT solver, respectively).
 - `Util.createDoubleArray`/`createIntegerArray` and the sensitivity
   `doubleArrToMatrix` write element-by-element and box through `List<Double>`;
   bulk-copy via buffers and take primitive arrays.
-- `SimulationResult` (dynamic) converts timestamps element-wise with
-  `index.map(lambda x: pd.Timestamp(x))`; use `pd.to_datetime`.
-- `NodeBreakerTopology.create_graph` uses `iterrows`; build node/edge lists from
-  column arrays like `BusBreakerTopology.create_graph` already does.
 - pandapower converter uses `df.apply(..., axis=1)` for ID strings and a
   per-generator FFI loop; vectorize the string build and batch the FFI call.
-- `SecurityAnalysisResult.__init__` eagerly materializes the violations
-  DataFrame even when the caller only reads `post_contingency_results`; make it
-  a lazy property.
 - C++ parameter-map loops copy each pair by value at ~8 sites; use
   `const auto&`. `arrayToStringVectorVector` / `convertDataframeMetadata` miss
   `reserve()` / `std::move`.
+
+## Build & runtime tuning (GraalVM native-image)
+
+These are build- and deploy-time knobs, orthogonal to the code changes above -
+they speed up (or slow down) the whole native library without touching the code.
+Config lives in `cpp/pypowsybl-java/CMakeLists.txt`.
+
+- **Optimization level.** `-Ob` (quick build, less optimized runtime) is applied
+  only for `CMAKE_BUILD_TYPE=Debug`. Release builds (and the shipped wheels) use
+  native-image's default `-O2` (full optimization) - so nothing is accidentally
+  under-optimized. Do not benchmark a Debug build.
+- **`-march`.** The build uses `-march=compatibility` so one wheel runs on any
+  x86-64 CPU. For a known-hardware / on-prem build, `-march=native` lets
+  native-image emit host-specific SIMD/AVX - a free speedup on numeric paths, at
+  the cost of a non-portable binary. Build-time only.
+- **Profile-Guided Optimization (PGO).** Not currently used. Oracle GraalVM can
+  instrument the image, run a representative workload to collect a profile, then
+  rebuild with `--pgo=<profile>`, typically yielding a further ~10-30% runtime
+  improvement. It requires the two-pass profiling workflow and Oracle GraalVM
+  (not GraalVM CE). This is likely the single biggest untapped runtime lever, but
+  it is a distribution/build-pipeline decision, not a code change.
+- **Garbage collector.** `--gc=G1` on Linux x86-64, `serial` elsewhere (G1 is
+  only supported there). G1 is the throughput-oriented choice for large heaps.
+- **Runtime heap/GC** can be tuned per-process via the `GRAALVM_OPTIONS`
+  environment variable (e.g. `GRAALVM_OPTIONS="-Xmx4G"`), see
+  `docs/user_guide/advanced_parameters.rst`. Matters for very large networks /
+  memory pressure.
 
 ## Notes
 
@@ -118,7 +123,10 @@ dependency and a missing IPOPT solver, respectively).
   with `-DBUILD_PYPOWSYBL_JAVA=OFF` pointing at a pre-built native lib
   (`PYPOWSYBL_NATIVE_BUILD_DIR`, or the extracted `dist/binaries.zip`) and
   rebuild just the extension — seconds instead of minutes.
-- Performance claims here are from code analysis, not yet from a benchmark
-  harness. Quantifying the wins (grid2op stepping loop, large `update_*`, large
-  `get_*`) is a natural next step and would help prioritize the outstanding
-  items.
+- The implemented items were measured on the PEGASE 13k MATPOWER network
+  (`case13659pegase`: 13,659 buses, 4,092 generators, 14,738 lines) against the
+  pre-branch baseline, both full Release native builds. Representative medians:
+  repeated small `update_*` in a loop ~11.5x faster (metadata cache), bulk
+  kwargs `update_*` ~1.4x, string-heavy reads (`get_buses`/`get_2wt`/`get_lines`)
+  ~1.2-1.3x; numeric-only reads gain ~1.05x. All measured operations improved,
+  no regressions.

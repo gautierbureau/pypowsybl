@@ -167,7 +167,8 @@ class PowerBalanceConstraints(Constraints):
     @staticmethod
     def _add_3wts_buses_expr(buses_balance: BusesBalance, t3_buses_balance: BusesBalance,
                              network_cache: NetworkCache, variable_context: VariableContext) -> None:
-        for t3_num, (t3_id, t3_row) in enumerate(network_cache.transformers_3w.iterrows()):
+        for t3_num, t3_row in enumerate(network_cache.transformers_3w.itertuples()):
+            t3_id = t3_row.Index
             t3_index = variable_context.t3_num_2_index[t3_num]
             if t3_row.bus1_id or t3_row.bus2_id or t3_row.bus3_id:
                 leg1_index = variable_context.t3_leg1_num_2_index[t3_num]

@@ -77,10 +77,18 @@ class NodeBreakerTopology:
         Representation of the topology as a networkx graph.
         """
         graph = _nx.Graph()
-        for (index, row) in self.nodes.iterrows():
-            graph.add_node(index, connectable_id=row['connectable_id'], connectable_type=row['connectable_type'])
-        for (index, row) in self._switchs.iterrows():
-            graph.add_edge(row['node1'], row['node2'], id=index, name=row['name'], kind=row['kind'],
-                           open=row['open'], retained=row['retained'])
+        # build node/edge lists from the column arrays instead of iterrows (which materializes a
+        # pandas Series per row)
+        nodes = self.nodes
+        graph.add_nodes_from(
+            (index, {'connectable_id': connectable_id, 'connectable_type': connectable_type})
+            for index, connectable_id, connectable_type
+            in zip(nodes.index, nodes['connectable_id'], nodes['connectable_type']))
+        switches = self._switchs
+        graph.add_edges_from(
+            (node1, node2, {'id': index, 'name': name, 'kind': kind, 'open': is_open, 'retained': retained})
+            for index, node1, node2, name, kind, is_open, retained
+            in zip(switches.index, switches['node1'], switches['node2'], switches['name'],
+                   switches['kind'], switches['open'], switches['retained']))
         graph.add_edges_from(self._internal_connections[['node1', 'node2']].values.tolist())
         return graph

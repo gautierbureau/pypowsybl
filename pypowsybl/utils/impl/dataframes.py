@@ -87,10 +87,12 @@ def _create_c_dataframe(df: DataFrame, series_metadata: List[_pp.SeriesMetadata]
     for idx, index_name in enumerate(df.index.names):
         if index_name is None:
             index_name = series_metadata[idx].name
+        # pass the raw numpy array (the C layer accepts it, like the data columns below) instead of
+        # boxing every index value into a Python list
         if is_multi_index:
-            columns_values.append(list(df.index.get_level_values(index_name)))
+            columns_values.append(df.index.get_level_values(index_name).values)
         else:
-            columns_values.append(list(df.index.values))
+            columns_values.append(df.index.values)
         columns_names.append(index_name)
         columns_types.append(metadata_by_name[index_name].type)
         is_index.append(True)
@@ -98,16 +100,85 @@ def _create_c_dataframe(df: DataFrame, series_metadata: List[_pp.SeriesMetadata]
     for series_name in df.columns.values:
         if series_name not in metadata_by_name:
             raise ValueError(f'No column named {series_name}')
-        series = df[series_name]
+        series_values = df[series_name].values
         series_type = metadata_by_name[series_name].type
         columns_types.append(series_type)
-        if series.values.size and isinstance(series.values[0], np.bool_):
+        if series_values.dtype == bool:
             # to avoid DeprecationWarning: In future, it will be an error for 'np.bool_' scalars to be interpreted as an index
-            columns_values.append(series.values.astype(int))
+            columns_values.append(series_values.astype(int))
         else:
-            columns_values.append(series.values)
+            columns_values.append(series_values)
         is_index.append(False)
     return _pp.create_dataframe(columns_values, columns_names, columns_types, is_index)
+
+
+def _create_c_dataframe_from_kwargs(metadata: List[_pp.SeriesMetadata], **kwargs: _Any) -> _pp.Dataframe:
+    """
+    Creates the C representation of a dataframe directly from named arguments, without building an
+    intermediate pandas DataFrame (which would construct an Index and consolidate the columns into
+    blocks - an extra full copy of the data - only to be immediately torn back into per-column arrays).
+
+    Produces the same columns, order, types and validation errors as
+    ``_create_c_dataframe(_adapt_kwargs(metadata, **kwargs), metadata)``.
+    """
+    metadata_by_name = {s.name: s for s in metadata}
+    index_names = [s.name for s in metadata if s.is_index]
+    index_name_set = set(index_names)
+
+    columns = {}
+    expected_size = None
+    for key, value in kwargs.items():
+        if value is not None:
+            col = _to_array(value)
+            size = col.shape[0]
+            if expected_size is None:
+                expected_size = size
+            elif size != expected_size:
+                raise ValueError(f'Network elements update: all arguments must have the same size, '
+                                 f'got size {size} for series {key}, expected {expected_size}')
+            columns[key] = col
+
+    is_index: List[bool] = []
+    columns_names: List[str] = []
+    columns_values: List[_Any] = []
+    columns_types: List[int] = []
+    # index columns first (in metadata order), matching _adapt_kwargs + _create_c_dataframe
+    for name in index_names:
+        if name not in columns:
+            raise ValueError('No data provided for index: ' + name)
+        columns_names.append(name)
+        columns_values.append(columns[name])
+        columns_types.append(metadata_by_name[name].type)
+        is_index.append(True)
+    # then data columns, in the order they were passed
+    for key, col in columns.items():
+        if key in index_name_set:
+            continue
+        if key not in metadata_by_name:
+            raise ValueError(f'No column named {key}')
+        columns_names.append(key)
+        columns_types.append(metadata_by_name[key].type)
+        if col.dtype == bool:
+            # to avoid DeprecationWarning: In future, it will be an error for 'np.bool_' scalars to be interpreted as an index
+            columns_values.append(col.astype(int))
+        else:
+            columns_values.append(col)
+        is_index.append(False)
+    return _pp.create_dataframe(columns_values, columns_names, columns_types, is_index)
+
+
+def _get_c_dataframe(metadata: List[_pp.SeriesMetadata], df: _Optional[DataFrame] = None,
+                     **kwargs: _Any) -> _pp.Dataframe:
+    """
+    Builds the C dataframe from either a ready-to-use DataFrame or named arguments. Fuses
+    ``_adapt_df_or_kwargs`` and ``_create_c_dataframe``: when data comes from kwargs it skips the
+    intermediate pandas DataFrame entirely.
+    """
+    if df is None:
+        return _create_c_dataframe_from_kwargs(metadata, **kwargs)
+    if kwargs:
+        raise RuntimeError('You must provide data in only one form: dataframe or named arguments')
+    return _create_c_dataframe(df, metadata)
 
 
 def _find_index_in_metadata(series_metadata: List[_pp.SeriesMetadata]) -> _pp.SeriesMetadata:

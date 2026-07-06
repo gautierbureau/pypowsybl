@@ -18,10 +18,9 @@ class SimulationResult:
         self._status = _pp.get_dynamic_simulation_results_status(self._handle)
         self._status_text = _pp.get_dynamic_simulation_results_status_text(self._handle)
         self._curves = create_data_frame_from_series_array(_pp.get_dynamic_curves(self._handle))
-        idx = self._curves.index.map(lambda x: pd.Timestamp(x))
-        self._curves.reset_index(drop=True, inplace=True)
-        self._curves[idx.name] = idx
-        self._curves.set_index(keys=idx.name, inplace=True)
+        # vectorized timestamp conversion (preserves the index name) instead of a per-timestep
+        # Python-level pd.Timestamp() call followed by a 3-step index rebuild
+        self._curves.index = pd.to_datetime(self._curves.index)
         self._fsv = create_data_frame_from_series_array(_pp.get_final_state_values(self._handle))
         self._timeline = create_data_frame_from_series_array(_pp.get_timeline(self._handle))
 

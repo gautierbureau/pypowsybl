@@ -87,7 +87,8 @@ class VariableContext:
                 q_bounds = Bounds.get_reactive_power_bounds(row).mirror()
                 if network_cache.is_too_small_reactive_power_bounds(q_bounds):
                     too_small_q_bounds_generator_ids.append(row.Index)
-                    logger.log(TRACE_LEVEL, f"Too small reactive power bounds {q_bounds} for generator '{row.Index}' (num={gen_num})")
+                    if logger.isEnabledFor(TRACE_LEVEL):
+                        logger.log(TRACE_LEVEL, f"Too small reactive power bounds {q_bounds} for generator '{row.Index}' (num={gen_num})")
                 else:
                     gen_q_num_2_index[gen_num] = len(gen_q_nums)
                     gen_q_nums.append(gen_num)
@@ -108,7 +109,8 @@ class VariableContext:
                 q_bounds = Bounds.get_reactive_power_bounds(row).mirror()
                 if network_cache.is_too_small_reactive_power_bounds(q_bounds):
                     too_small_q_bounds_generator_ids.append(row.Index)
-                    logger.log(TRACE_LEVEL, f"Too small reactive power bounds {q_bounds} for battery '{row.Index}' (num={bat_num})")
+                    if logger.isEnabledFor(TRACE_LEVEL):
+                        logger.log(TRACE_LEVEL, f"Too small reactive power bounds {q_bounds} for battery '{row.Index}' (num={bat_num})")
                 else:
                     bat_q_num_2_index[bat_num] = len(bat_q_nums)
                     bat_q_nums.append(bat_num)
@@ -265,7 +267,8 @@ class VariableContext:
         connected_gen_p = []
         connected_gen_q = []
         disconnected_gen_ids: list[str] = []
-        for gen_num, (gen_id, row) in enumerate(network_cache.generators.iterrows()):
+        for gen_num, row in enumerate(network_cache.generators.itertuples()):
+            gen_id = row.Index
             bus_id = row.bus_id
             if bus_id:
                 connected_gen_ids.append(gen_id.__str__())
@@ -299,10 +302,12 @@ class VariableContext:
                 connected_gen_voltage_regulator_on.append(voltage_regulator_on)
                 connected_gen_q.append(q)
 
-                logger.log(TRACE_LEVEL, f"Update generator '{gen_id}' (num={gen_num}): target_p={target_p}, target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update generator '{gen_id}' (num={gen_num}): target_p={target_p}, target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
             else:
                 disconnected_gen_ids.append(gen_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected generator '{gen_id}' (num={gen_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected generator '{gen_id}' (num={gen_num})")
 
         network_cache.update_generators(connected_gen_ids,
                                         connected_gen_target_p,
@@ -322,7 +327,8 @@ class VariableContext:
         connected_bat_p = []
         connected_bat_q = []
         disconnected_bat_ids = []
-        for bat_num, (bat_id, row) in enumerate(network_cache.batteries.iterrows()):
+        for bat_num, row in enumerate(network_cache.batteries.itertuples()):
+            bat_id = row.Index
             bus_id = row.bus_id
             if bus_id:
                 connected_bat_ids.append(bat_id.__str__())
@@ -356,10 +362,12 @@ class VariableContext:
                 connected_bat_voltage_regulator_on.append(voltage_regulator_on)
                 connected_bat_q.append(q)
 
-                logger.log(TRACE_LEVEL, f"Update battery '{bat_id}' (num={bat_num}): target_p={target_p}, target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update battery '{bat_id}' (num={bat_num}): target_p={target_p}, target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
             else:
                 disconnected_bat_ids.append(bat_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected battery '{bat_id}' (num={bat_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected battery '{bat_id}' (num={bat_num})")
 
         network_cache.update_batteries(connected_bat_ids,
                                        connected_bat_target_p,
@@ -378,7 +386,8 @@ class VariableContext:
         connected_vsc_cs_p = []
         connected_vsc_cs_q = []
         disconnected_vsc_cs_ids = []
-        for vsc_cs_num, (vsc_cs_id, row) in enumerate(network_cache.vsc_converter_stations.iterrows()):
+        for vsc_cs_num, row in enumerate(network_cache.vsc_converter_stations.itertuples()):
+            vsc_cs_id = row.Index
             bus_id = row.bus_id
             if bus_id:
                 connected_vsc_cs_ids.append(vsc_cs_id.__str__())
@@ -401,10 +410,12 @@ class VariableContext:
                 voltage_regulator_on = q_bounds.contains(q)
                 connected_vsc_cs_voltage_regulator_on.append(voltage_regulator_on)
 
-                logger.log(TRACE_LEVEL, f"Update VSC converter station '{vsc_cs_id}' (num={vsc_cs_num}): target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update VSC converter station '{vsc_cs_id}' (num={vsc_cs_num}): target_q={target_q}, target_v={target_v}, voltage_regulator_on={voltage_regulator_on}, p={p}, q={q}")
             else:
                 disconnected_vsc_cs_ids.append(vsc_cs_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected VSC converter station '{vsc_cs_id}' (num={vsc_cs_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected VSC converter station '{vsc_cs_id}' (num={vsc_cs_num})")
 
         network_cache.update_vsc_converter_stations(connected_vsc_cs_ids,
                                                     connected_vsc_cs_target_q,
@@ -426,7 +437,8 @@ class VariableContext:
             target_p = abs(p1) if NetworkCache.is_rectifier(hvdc_line_row.converter_station1_id, hvdc_line_row) else abs(p2)
             hvdc_line_target_p.append(target_p)
 
-            logger.log(TRACE_LEVEL, f"Update HVDC line '{hvdc_line_row.Index}': target_p={target_p}")
+            if logger.isEnabledFor(TRACE_LEVEL):
+                logger.log(TRACE_LEVEL, f"Update HVDC line '{hvdc_line_row.Index}': target_p={target_p}")
 
         network_cache.update_hvdc_lines(hvdc_line_ids, hvdc_line_target_p)
 
@@ -438,7 +450,8 @@ class VariableContext:
         connected_svc_p = []
         connected_svc_q = []
         disconnected_svc_ids = []
-        for svc_num, (svc_id, row) in enumerate(network_cache.static_var_compensators.iterrows()):
+        for svc_num, row in enumerate(network_cache.static_var_compensators.itertuples()):
+            svc_id = row.Index
             bus_id = row.bus_id
             if bus_id:
                 connected_svc_ids.append(svc_id.__str__())
@@ -460,10 +473,12 @@ class VariableContext:
                 regulation_mode = 'VOLTAGE' if q_bounds.contains(q) else 'REACTIVE_POWER'
                 connected_svc_regulation_mode.append(regulation_mode)
 
-                logger.log(TRACE_LEVEL, f"Update SVC '{svc_id}' (num={svc_num}): target_q={target_q}, target_v={target_v}, regulation_mode={regulation_mode}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update SVC '{svc_id}' (num={svc_num}): target_q={target_q}, target_v={target_v}, regulation_mode={regulation_mode}")
             else:
                 disconnected_svc_ids.append(svc_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected SVC '{svc_id}' (num={svc_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected SVC '{svc_id}' (num={svc_num})")
 
         network_cache.update_static_var_compensators(connected_svc_ids,
                                                      connected_svc_target_q,
@@ -478,7 +493,8 @@ class VariableContext:
         connected_shunt_p = []
         connected_shunt_q = []
         disconnected_shunt_ids = []
-        for shunt_num, (shunt_id, row) in enumerate(network_cache.shunts.iterrows()):
+        for shunt_num, row in enumerate(network_cache.shunts.itertuples()):
+            shunt_id = row.Index
             bus_id = row.bus_id
             if bus_id:
                 shunt_index = self.shunt_num_2_index[shunt_num]
@@ -488,10 +504,12 @@ class VariableContext:
                 connected_shunt_p.append(p)
                 connected_shunt_q.append(q)
 
-                logger.log(TRACE_LEVEL, f"Update shunt '{shunt_id}' (num={shunt_num}): p={p} q={q}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update shunt '{shunt_id}' (num={shunt_num}): p={p} q={q}")
             else:
                 disconnected_shunt_ids.append(shunt_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected shunt '{shunt_id}' (num={shunt_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected shunt '{shunt_id}' (num={shunt_num})")
 
         network_cache.update_shunt_compensators(connected_shunt_ids, connected_shunt_p, connected_shunt_q, disconnected_shunt_ids)
 
@@ -501,7 +519,8 @@ class VariableContext:
         branch_p2 = []
         branch_q1 = []
         branch_q2 = []
-        for branch_num, (branch_id, row) in enumerate(network_cache.branches.iterrows()):
+        for branch_num, row in enumerate(network_cache.branches.itertuples()):
+            branch_id = row.Index
             branch_index = self.branch_num_2_index[branch_num]
             branch_ids.append(branch_id.__str__())
             if row.bus1_id and row.bus2_id:
@@ -530,7 +549,8 @@ class VariableContext:
             branch_q1.append(q1)
             branch_q2.append(q2)
 
-            logger.log(TRACE_LEVEL, f"Update branch '{branch_id}': p1={p1} p2={p2} q1={q1} q2={q2}")
+            if logger.isEnabledFor(TRACE_LEVEL):
+                logger.log(TRACE_LEVEL, f"Update branch '{branch_id}': p1={p1} p2={p2} q1={q1} q2={q2}")
 
         network_cache.update_branches(branch_ids, branch_p1, branch_p2, branch_q1, branch_q2)
 
@@ -544,7 +564,8 @@ class VariableContext:
         t3_q3 = []
         t3_v = []
         t3_angle = []
-        for t3_num, (t3_id, t3_row) in enumerate(network_cache.transformers_3w.iterrows()):
+        for t3_num, t3_row in enumerate(network_cache.transformers_3w.itertuples()):
+            t3_id = t3_row.Index
             t3_ids.append(t3_id.__str__())
             t3_index = self.t3_num_2_index[t3_num]
             if t3_row.bus1_id or t3_row.bus2_id or t3_row.bus3_id:
@@ -594,7 +615,8 @@ class VariableContext:
             t3_v.append(v * t3_row.rated_u0)
             t3_angle.append(math.degrees(angle))
 
-            logger.log(TRACE_LEVEL, f"Update 3 windings transformer '{t3_id}': p1={p1} p2={p2} p3={p3} q1={q1} q2={q2} q3={q3} v={v} angle={angle}")
+            if logger.isEnabledFor(TRACE_LEVEL):
+                logger.log(TRACE_LEVEL, f"Update 3 windings transformer '{t3_id}': p1={p1} p2={p2} p3={p3} q1={q1} q2={q2} q3={q3} v={v} angle={angle}")
 
         network_cache.update_transformers_3w(t3_ids, t3_p1, t3_p2, t3_p3, t3_q1, t3_q2, t3_q3, t3_v, t3_angle)
 
@@ -602,14 +624,16 @@ class VariableContext:
         bus_ids = []
         bus_v_mag = []
         bus_v_angle = []
-        for bus_num, (bus_id, row) in enumerate(network_cache.buses.iterrows()):
+        for bus_num, row in enumerate(network_cache.buses.itertuples()):
+            bus_id = row.Index
             bus_ids.append(bus_id.__str__())
             v = model.get_value(self.v_vars[bus_num])
             bus_v_mag.append(v)
             angle = model.get_value(self.ph_vars[bus_num])
             bus_v_angle.append(angle)
 
-            logger.log(TRACE_LEVEL, f"Update bus '{bus_id}' (num={bus_num}): v={v}, angle={angle}")
+            if logger.isEnabledFor(TRACE_LEVEL):
+                logger.log(TRACE_LEVEL, f"Update bus '{bus_id}' (num={bus_num}): v={v}, angle={angle}")
 
         network_cache.update_buses(bus_ids, bus_v_mag, bus_v_angle)
 
@@ -620,7 +644,8 @@ class VariableContext:
         connected_bl_p = []
         connected_bl_q = []
         disconnected_bl_ids = []
-        for bl_num, (bl_id, row) in enumerate(network_cache.boundary_lines.iterrows()):
+        for bl_num, row in enumerate(network_cache.boundary_lines.itertuples()):
+            bl_id = row.Index
             bl_index = self.bl_num_2_index[bl_num]
 
             if row.bus_id:
@@ -633,10 +658,12 @@ class VariableContext:
                 q = model.get_value(self.bl_branch_q1_vars[bl_index])
                 connected_bl_p.append(p)
                 connected_bl_q.append(q)
-                logger.log(TRACE_LEVEL, f"Update boundary line '{bl_id}' (num={bl_num}): v={v}, angle={angle}, p={p}, q={q}")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update boundary line '{bl_id}' (num={bl_num}): v={v}, angle={angle}, p={p}, q={q}")
             else:
                 disconnected_bl_ids.append(bl_id.__str__())
-                logger.log(TRACE_LEVEL, f"Update disconnected boundary line '{bl_id}' (num={bl_num})")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Update disconnected boundary line '{bl_id}' (num={bl_num})")
 
         network_cache.update_boundary_lines(connected_bl_ids,
                                             connected_bl_v,
