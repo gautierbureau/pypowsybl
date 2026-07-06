@@ -1269,14 +1269,32 @@ JavaHandle runSensitivityAnalysis(const JavaHandle& sensitivityAnalysisContext, 
     return PowsyblCaller::get()->callJava<JavaHandle>(::runSensitivityAnalysis, sensitivityAnalysisContext, network, c_parameters.get(), (char *) provider.data(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
-matrix* getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
-    return PowsyblCaller::get()->callJava<matrix*>(::getSensitivityMatrix, sensitivityAnalysisResultContext,
+// The two result-matrix getters below return a std::shared_ptr with a custom deleter that
+// frees the buffer on the Java side (freeSensitivityMatrix). Without this, every result-matrix
+// pull would leak the values buffer + matrix struct allocated in
+// SensitivityAnalysisResultContext.createDoubleMatrix. The pybind11 binding uses
+// std::shared_ptr<matrix> as the holder for the Matrix class, so the Python-side lifetime of
+// the returned object drives the free.
+std::shared_ptr<matrix> getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
+    matrix* m = PowsyblCaller::get()->callJava<matrix*>(::getSensitivityMatrix, sensitivityAnalysisResultContext,
                                 (char*) matrixId.c_str(), (char*) contingencyId.c_str());
+    if (m == nullptr) {
+        return nullptr;
+    }
+    return std::shared_ptr<matrix>(m, [](matrix* ptr) {
+        PowsyblCaller::get()->callJava(::freeSensitivityMatrix, ptr);
+    });
 }
 
-matrix* getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
-    return PowsyblCaller::get()->callJava<matrix*>(::getReferenceMatrix, sensitivityAnalysisResultContext,
+std::shared_ptr<matrix> getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
+    matrix* m = PowsyblCaller::get()->callJava<matrix*>(::getReferenceMatrix, sensitivityAnalysisResultContext,
                                 (char*) matrixId.c_str(), (char*) contingencyId.c_str());
+    if (m == nullptr) {
+        return nullptr;
+    }
+    return std::shared_ptr<matrix>(m, [](matrix* ptr) {
+        PowsyblCaller::get()->callJava(::freeSensitivityMatrix, ptr);
+    });
 }
 
 SeriesArray* createNetworkElementsSeriesArray(const JavaHandle& network, element_type elementType, filter_attributes_type filterAttributesType, const std::vector<std::string>& attributes, dataframe* dataframe, bool perUnit, double nominalApparentPower) {

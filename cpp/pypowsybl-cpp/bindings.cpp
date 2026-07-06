@@ -1012,7 +1012,11 @@ PYBIND11_MODULE(_pypowsybl, m) {
     m.def("run_sensitivity_analysis", &pypowsybl::runSensitivityAnalysis, "Run a sensitivity analysis", py::call_guard<py::gil_scoped_release>(),
           py::arg("sensitivity_analysis_context"), py::arg("network"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"));
 
-    py::class_<matrix>(m, "Matrix", py::buffer_protocol())
+    // Matrix uses shared_ptr as its pybind11 holder so that the shared_ptr's custom deleter
+    // returned by pypowsybl::getSensitivityMatrix / getReferenceMatrix (see powsybl-cpp.cpp)
+    // fires when the Python-side reference is dropped, returning the GraalVM-allocated
+    // buffers to the Java isolate. Without this, every result-matrix pull would leak.
+    py::class_<matrix, std::shared_ptr<matrix>>(m, "Matrix", py::buffer_protocol())
             .def_buffer([](matrix& m) -> py::buffer_info {
                 return py::buffer_info(m.values,
                                        sizeof(double),
