@@ -135,45 +135,105 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         return matrices;
     }
 
-    int getTotalNumberOfMatrixFactors(List<MatrixInfo> matrices) {
-        int count = 0;
-        for (MatrixInfo matrix : matrices) {
-            count += matrix.getColumnCount() * matrix.getRowCount();
-        }
-        return count;
-    }
+    /**
+     * Streams factors out of the matrix descriptions ({@link MatrixInfo}) without materializing a
+     * {@code List<SensitivityFactor>}: for each matrix, resolves the variable type per row (once),
+     * then emits one factor per (column, contingency context) pair. Kept as its own class so the
+     * factor-generation logic is readable in isolation and so the per-row resolution is not lost
+     * inside a lambda body.
+     */
+    static final class MatrixFactorReader implements SensitivityFactorReader {
 
-    int getTotalNumberOfMatrixFactorsColumns(List<MatrixInfo> matrices) {
-        int count = 0;
-        for (MatrixInfo matrix : matrices) {
-            count += matrix.getColumnCount();
-        }
-        return count;
-    }
+        private final Network network;
 
-    private SensitivityVariableType getVariableType(Network network, String variableId) {
-        Identifiable<?> identifiable = network.getIdentifiable(variableId);
-        if (identifiable instanceof Injection<?>) {
-            return SensitivityVariableType.INJECTION_ACTIVE_POWER;
-        } else if (identifiable instanceof TwoWindingsTransformer) {
-            return SensitivityVariableType.TRANSFORMER_PHASE;
-        } else if (identifiable instanceof ThreeWindingsTransformer twt) {
-            ThreeWindingsTransformer.Leg phaseTapChangerLeg = twt.getLegStream()
-                    .filter(PhaseTapChangerHolder::hasPhaseTapChanger)
-                    .findFirst()
-                    .orElse(null);
-            if (phaseTapChangerLeg != null) {
-                return switch (phaseTapChangerLeg.getSide()) {
-                    case ONE -> SensitivityVariableType.TRANSFORMER_PHASE_1;
-                    case TWO -> SensitivityVariableType.TRANSFORMER_PHASE_2;
-                    case THREE -> SensitivityVariableType.TRANSFORMER_PHASE_3;
-                };
+        private final List<MatrixInfo> matrices;
+
+        private final Map<String, SensitivityVariableSet> variableSetsById;
+
+        MatrixFactorReader(Network network, List<MatrixInfo> matrices, Map<String, SensitivityVariableSet> variableSetsById) {
+            this.network = network;
+            this.matrices = matrices;
+            this.variableSetsById = variableSetsById;
+        }
+
+        @Override
+        public void read(Handler handler) {
+            for (MatrixInfo matrix : matrices) {
+                readMatrix(matrix, handler);
             }
-            return null;
-        } else if (identifiable instanceof HvdcLine) {
-            return SensitivityVariableType.HVDC_LINE_ACTIVE_POWER;
-        } else {
-            return null;
+        }
+
+        private void readMatrix(MatrixInfo matrix, Handler handler) {
+            List<String> columns = matrix.getColumnIds();
+            List<String> rows = matrix.getRowIds();
+            List<ContingencyContext> contingencyContexts = buildContingencyContexts(matrix);
+            SensitivityFunctionType functionType = matrix.getFunctionType();
+            SensitivityVariableType matrixVariableType = matrix.getVariableType();
+
+            // Resolve variableType (and variableSet flag) per row, not per (row, column, context).
+            // network.getIdentifiable / variableSetsById lookups depend only on variableId.
+            for (String variableId : rows) {
+                SensitivityVariableType variableType = matrixVariableType;
+                boolean variableSet = false;
+                if (variableType == null) {
+                    variableType = resolveVariableTypeFromNetwork(network, variableId);
+                    if (variableType == null) {
+                        if (variableSetsById.containsKey(variableId)) {
+                            variableSet = true;
+                            variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
+                        } else {
+                            throw new PowsyblException("Variable '" + variableId + "' not found");
+                        }
+                    }
+                }
+                for (String functionId : columns) {
+                    for (ContingencyContext cCtx : contingencyContexts) {
+                        handler.onFactor(functionType, functionId, variableType, variableId, variableSet, cCtx);
+                    }
+                }
+            }
+        }
+
+        private static List<ContingencyContext> buildContingencyContexts(MatrixInfo matrix) {
+            ContingencyContextType type = matrix.getContingencyContextType();
+            if (type == ContingencyContextType.ALL) {
+                return List.of(ContingencyContext.all());
+            }
+            if (type == ContingencyContextType.NONE) {
+                return List.of(ContingencyContext.none());
+            }
+            List<String> contingencyIds = matrix.getContingencyIds();
+            List<ContingencyContext> contexts = new ArrayList<>(contingencyIds.size());
+            for (String c : contingencyIds) {
+                contexts.add(ContingencyContext.specificContingency(c));
+            }
+            return contexts;
+        }
+
+        private static SensitivityVariableType resolveVariableTypeFromNetwork(Network network, String variableId) {
+            Identifiable<?> identifiable = network.getIdentifiable(variableId);
+            if (identifiable instanceof Injection<?>) {
+                return SensitivityVariableType.INJECTION_ACTIVE_POWER;
+            } else if (identifiable instanceof TwoWindingsTransformer) {
+                return SensitivityVariableType.TRANSFORMER_PHASE;
+            } else if (identifiable instanceof ThreeWindingsTransformer twt) {
+                ThreeWindingsTransformer.Leg phaseTapChangerLeg = twt.getLegStream()
+                        .filter(PhaseTapChangerHolder::hasPhaseTapChanger)
+                        .findFirst()
+                        .orElse(null);
+                if (phaseTapChangerLeg != null) {
+                    return switch (phaseTapChangerLeg.getSide()) {
+                        case ONE -> SensitivityVariableType.TRANSFORMER_PHASE_1;
+                        case TWO -> SensitivityVariableType.TRANSFORMER_PHASE_2;
+                        case THREE -> SensitivityVariableType.TRANSFORMER_PHASE_3;
+                    };
+                }
+                return null;
+            } else if (identifiable instanceof HvdcLine) {
+                return SensitivityVariableType.HVDC_LINE_ACTIVE_POWER;
+            } else {
+                return null;
+            }
         }
     }
 
@@ -184,63 +244,49 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
 
         Map<String, SensitivityVariableSet> variableSetsById = variableSets.stream().collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
 
-        SensitivityFactorReader factorReader = handler -> {
+        SensitivityFactorReader factorReader = new MatrixFactorReader(network, matrices, variableSetsById);
 
-            for (MatrixInfo matrix : matrices) {
-                List<String> columns = matrix.getColumnIds();
-                List<String> rows = matrix.getRowIds();
-                List<ContingencyContext> contingencyContexts = new ArrayList<>();
-                if (matrix.getContingencyContextType() == ContingencyContextType.ALL) {
-                    contingencyContexts.add(ContingencyContext.all());
-                } else if (matrix.getContingencyContextType() == ContingencyContextType.NONE) {
-                    contingencyContexts.add(ContingencyContext.none());
-                } else {
-                    for (String c : matrix.getContingencyIds()) {
-                        contingencyContexts.add(ContingencyContext.specificContingency(c));
-                    }
-                }
+        // Single pass over the matrices: capture total factor / column counts (for allocating the
+        // result arrays), plus a sorted (offset, MatrixInfo) table indexed by factorContext for
+        // the result writer's hot-path lookup. prepareMatrices() produces matrices in strictly
+        // increasing offset order, so we can rely on natural ordering here.
+        final int matrixCount = matrices.size();
+        final MatrixInfo[] matricesArr = new MatrixInfo[matrixCount];
+        final int[] offsetTable = new int[matrixCount];
+        int baseCaseValueSize = 0;
+        int totalColumnsCount = 0;
+        for (int i = 0; i < matrixCount; i++) {
+            MatrixInfo m = matrices.get(i);
+            matricesArr[i] = m;
+            offsetTable[i] = m.getOffsetData();
+            baseCaseValueSize += m.getRowCount() * m.getColumnCount();
+            totalColumnsCount += m.getColumnCount();
+        }
 
-                for (String variableId : rows) {
-                    for (String functionId : columns) {
-                        SensitivityVariableType variableType = matrix.getVariableType();
-                        boolean variableSet = false;
-                        if (variableType == null) {
-                            variableType = getVariableType(network, variableId);
-                            if (variableType == null) {
-                                if (variableSetsById.containsKey(variableId)) {
-                                    variableSet = true;
-                                    variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
-                                } else {
-                                    throw new PowsyblException("Variable '" + variableId + "' not found");
-                                }
-                            }
-                        }
-                        for (ContingencyContext cCtx : contingencyContexts) {
-                            handler.onFactor(matrix.getFunctionType(), functionId, variableType, variableId, variableSet, cCtx);
-                        }
-                    }
-                }
-            }
-        };
-
-        int baseCaseValueSize = getTotalNumberOfMatrixFactors(matrices);
         double[] baseCaseValues = new double[baseCaseValueSize];
         double[][] valuesByContingencyIndex = new double[contingencies.size()][baseCaseValueSize];
-
-        int totalColumnsCount = getTotalNumberOfMatrixFactorsColumns(matrices);
         double[] baseCaseReferences = new double[totalColumnsCount];
         double[][] referencesByContingencyIndex = new double[contingencies.size()][totalColumnsCount];
-
-        NavigableMap<Integer, MatrixInfo> factorIndexMatrixMap = new TreeMap<>();
-        for (MatrixInfo m : matrices) {
-            factorIndexMatrixMap.put(m.getOffsetData(), m);
-        }
 
         SensitivityResultWriter valueWriter = new SensitivityResultWriter() {
             @Override
             public void writeSensitivityValue(int factorContext, int contingencyIndex, int strategyIndex,
                                               double value, double functionReference) {
-                MatrixInfo m = factorIndexMatrixMap.floorEntry(factorContext).getValue();
+                // Locate the owning matrix without boxing factorContext to Integer or allocating a
+                // Map.Entry: the single-matrix case (common) is a direct read; otherwise binarySearch
+                // on the sorted offset table. This method is called F * (K + 1) times, so avoiding
+                // per-call allocations matters on large workloads.
+                MatrixInfo m;
+                if (matrixCount == 1) {
+                    m = matricesArr[0];
+                } else {
+                    int idx = Arrays.binarySearch(offsetTable, factorContext);
+                    if (idx < 0) {
+                        // binarySearch returns -(insertion point) - 1; floor position is that minus one.
+                        idx = -idx - 2;
+                    }
+                    m = matricesArr[idx];
+                }
 
                 int columnIdx = m.getOffsetColumn() + (factorContext - m.getOffsetData()) % m.getColumnCount();
                 if (contingencyIndex != -1) {
