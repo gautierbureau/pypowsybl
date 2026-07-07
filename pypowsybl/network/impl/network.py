@@ -32,12 +32,17 @@ import pandas as pd
 import pypowsybl._pypowsybl as _pp
 from pypowsybl._pypowsybl import ElementType, ValidationLevel
 from pypowsybl.utils import (
-    _adapt_df_or_kwargs,
     _create_c_dataframe,
+    _create_c_dataframe_from_kwargs,
+    _get_c_dataframe,
     _create_properties_c_dataframe,
     _adapt_properties_kwargs,
     _get_c_dataframes,
-    path_to_str, PathOrStr
+    path_to_str, PathOrStr,
+    get_network_elements_dataframe_metadata,
+    get_network_elements_creation_dataframes_metadata,
+    get_network_extensions_dataframe_metadata,
+    get_network_extensions_creation_dataframes_metadata,
 )
 from pypowsybl.report import ReportNode
 from .bus_breaker_topology import BusBreakerTopology
@@ -711,9 +716,8 @@ class Network:  # pylint: disable=too-many-public-methods
             raise RuntimeError('parameters "all_attributes" and "attributes" are mutually exclusive')
 
         if kwargs:
-            metadata = _pp.get_network_elements_dataframe_metadata(element_type)
-            df = _adapt_df_or_kwargs(metadata, None, **kwargs)
-            elements_array = _create_c_dataframe(df, metadata)
+            metadata = get_network_elements_dataframe_metadata(element_type)
+            elements_array = _create_c_dataframe_from_kwargs(metadata, **kwargs)
 
         else:
             elements_array = None
@@ -721,7 +725,9 @@ class Network:  # pylint: disable=too-many-public-methods
                                                                 attributes, elements_array, self._per_unit,
                                                                 self._nominal_apparent_power)
         result = create_data_frame_from_series_array(series_array)
-        if attributes:
+        # the native layer already returns exactly the requested attributes; only re-slice (a full
+        # copy) if the column order actually differs from what was asked for
+        if attributes and list(result.columns) != attributes:
             result = result[attributes]
         return result
 
@@ -3351,9 +3357,8 @@ class Network:  # pylint: disable=too-many-public-methods
                     Arguments can be single values or any type of sequence.
                     In the case of sequences, all arguments must have the same length.
         """
-        metadata = _pp.get_network_elements_dataframe_metadata(element_type)
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        metadata = get_network_elements_dataframe_metadata(element_type)
+        c_df = _get_c_dataframe(metadata, df, **kwargs)
         _pp.update_network_elements_with_series(self._handle, c_df, element_type, self._per_unit,
                                                 self._nominal_apparent_power)
 
@@ -4378,9 +4383,8 @@ class Network:  # pylint: disable=too-many-public-methods
         Notes:
             The id column in the dataframe provides the link to the extensions parent elements
         """
-        metadata = _pp.get_network_extensions_dataframe_metadata(extension_name, table_name)
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        metadata = get_network_extensions_dataframe_metadata(extension_name, table_name)
+        c_df = _get_c_dataframe(metadata, df, **kwargs)
         _pp.update_extensions(self._handle, extension_name, table_name, c_df)
 
     def update_dc_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
@@ -4775,12 +4779,12 @@ class Network:  # pylint: disable=too-many-public-methods
 
     def _create_elements(self, element_type: ElementType, dfs: List[Optional[DataFrame]],
                          **kwargs: ArrayLike) -> None:
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(element_type)
+        metadata = get_network_elements_creation_dataframes_metadata(element_type)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_element(self._handle, c_dfs, element_type)
 
     def _create_extensions(self, extension_name: str, dfs: List[Optional[DataFrame]], **kwargs: ArrayLike) -> None:
-        metadata = _pp.get_network_extensions_creation_dataframes_metadata(extension_name)
+        metadata = get_network_extensions_creation_dataframes_metadata(extension_name)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_extensions(self._handle, c_dfs, extension_name)
 
@@ -6384,9 +6388,8 @@ class Network:  # pylint: disable=too-many-public-methods
 
                 network.remove_aliases(id='element_id', alias='alias_id')
         """
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(ElementType.ALIAS)[0]
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        metadata = get_network_elements_creation_dataframes_metadata(ElementType.ALIAS)[0]
+        c_df = _get_c_dataframe(metadata, df, **kwargs)
         _pp.remove_aliases(self._handle, c_df)
 
     def remove_elements(self, elements_ids: Union[str, List[str]]) -> None:
@@ -6444,9 +6447,8 @@ class Network:  # pylint: disable=too-many-public-methods
                 network.remove_internal_connections(voltage_level_id='VL1', node1=3, node2=6)
 
         """
-        metadata = _pp.get_network_elements_creation_dataframes_metadata(ElementType.INTERNAL_CONNECTION)[0]
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        metadata = get_network_elements_creation_dataframes_metadata(ElementType.INTERNAL_CONNECTION)[0]
+        c_df = _get_c_dataframe(metadata, df, **kwargs)
         _pp.remove_internal_connections(self._handle, c_df)
 
     def get_extensions(self, extension_name: str, table_name: str = "") -> DataFrame:

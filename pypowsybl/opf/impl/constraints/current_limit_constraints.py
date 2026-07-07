@@ -31,8 +31,9 @@ class CurrentLimitConstraints(Constraints):
                 i = poi.ExprBuilder()
                 i += p * p + q * q
                 model.add_quadratic_constraint(i, poi.Leq, limit_row.value * limit_row.value)
-                logger.log(TRACE_LEVEL,
-                           f"Add side {side} current limit constraint (value={limit_row.value}) to branch '{branch_row.Index}'")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL,
+                               f"Add side {side} current limit constraint (value={limit_row.value}) to branch '{branch_row.Index}'")
 
     def add(self, parameters: ModelParameters, network_cache: NetworkCache,
             variable_context: VariableContext, model: Model) -> None:

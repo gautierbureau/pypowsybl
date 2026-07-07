@@ -5,7 +5,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 #include <pybind11/pybind11.h>
-#include <mutex>
 
 namespace py = pybind11;
 
@@ -20,11 +19,7 @@ public:
     py::object getLogger();
 
 private:
-    py::object logger_;
-    std::mutex loggerMutex_;
-
-    static CppToPythonLogger* singleton_;
-    static std::mutex initMutex_;
+    py::object logger_; // only accessed with the GIL held (see pylogging.cpp)
 };
 
 void logFromJava(int level, long timestamp, char* loggerName, char* message);

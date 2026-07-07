@@ -71,7 +71,8 @@ class OpfModel:
 
     def analyze_violations(self, parameters: ModelParameters) -> None:
         # check voltage bounds
-        for bus_num, (bus_id, row) in enumerate(self.network_cache.buses.iterrows()):
+        for bus_num, row in enumerate(self.network_cache.buses.itertuples()):
+            bus_id = row.Index
             v = self.model.get_value(self.variable_context.v_vars[bus_num])
             v_bounds = Bounds.get_voltage_bounds(row.low_voltage_limit, row.high_voltage_limit, parameters.default_voltage_bounds)
             if not v_bounds.contains(v):
@@ -79,7 +80,8 @@ class OpfModel:
         self._check_generator_limits()
 
     def _check_generator_limits(self) -> None:
-        for gen_num, (gen_id, row) in enumerate(self.network_cache.generators.iterrows()):
+        for gen_num, row in enumerate(self.network_cache.generators.itertuples()):
+            gen_id = row.Index
             if row.bus_id:
                 gen_p_index = self.variable_context.gen_p_num_2_index[gen_num]
                 p = self.model.get_value(self.variable_context.gen_p_vars[gen_p_index])

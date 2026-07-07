@@ -25,7 +25,8 @@ class Transformer3wMiddleVoltageBounds(VariableBounds):
         for t3_num, t3_row in enumerate(cast(list[Transformer3WRow], network_cache.transformers_3w.itertuples())):
             if t3_row.bus1_id or t3_row.bus2_id or t3_row.bus3_id:
                 v_bounds = Bounds.get_voltage_bounds(None, None, parameters.default_voltage_bounds)
-                logger.log(TRACE_LEVEL, f"Add voltage magnitude bounds {v_bounds} to 3 windings transformer middle '{t3_row.Index}' (num={t3_num})'")
+                if logger.isEnabledFor(TRACE_LEVEL):
+                    logger.log(TRACE_LEVEL, f"Add voltage magnitude bounds {v_bounds} to 3 windings transformer middle '{t3_row.Index}' (num={t3_num})'")
                 t3_index = variable_context.t3_num_2_index[t3_num]
                 model.set_variable_bounds(variable_context.t3_middle_v_vars[t3_index],
                                           *Bounds.fix(t3_row.Index, v_bounds.min_value, v_bounds.max_value))

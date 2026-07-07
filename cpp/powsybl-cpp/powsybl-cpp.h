@@ -25,14 +25,15 @@ class GraalVmGuard {
 public:
     GraalVmGuard();
 
-    ~GraalVmGuard() noexcept(false);
+    // No per-guard detach: the calling thread stays attached to the isolate until it exits (see the
+    // thread_local in powsybl-cpp.cpp), so guards are cheap to construct and destroy.
+    ~GraalVmGuard() = default;
 
     graal_isolatethread_t * thread() const {
         return thread_;
     }
 
 private:
-    bool shouldDetach = false;
     graal_isolatethread_t* thread_ = nullptr;
 };
 
@@ -57,6 +58,7 @@ template<typename F, typename... ARGS>
 void callJava(F f, ARGS... args) {
     GraalVmGuard guard;
     exception_handler exc;
+    exc.message = nullptr; // never rely on a callee to initialize it: a missing message must read as "no error"
 
     beginCall_(&guard, &exc);
     f(guard.thread(), args..., &exc);
@@ -70,6 +72,7 @@ template<typename T, typename F, typename... ARGS>
 T callJava(F f, ARGS... args) {
     GraalVmGuard guard;
     exception_handler exc;
+    exc.message = nullptr; // never rely on a callee to initialize it: a missing message must read as "no error"
 
     beginCall_(&guard, &exc);
     auto r = f(guard.thread(), args..., &exc);
@@ -85,8 +88,6 @@ void setPostProcessingJavaCall(std::function<void()> func);
 
 private:
 
-static PowsyblCaller* singleton_;
-static std::mutex initMutex_;
 std::function <void(GraalVmGuard* guard, exception_handler* exc)> beginCall_;
 std::function <void()> endCall_;
 
@@ -797,6 +798,8 @@ SeriesArray* getNetworkAreaDiagramDefaultVoltageLevelDescriptions(const JavaHand
 JavaHandle createSecurityAnalysis();
 
 void addContingency(const JavaHandle& analysisContext, const std::string& contingencyId, const std::vector<std::string>& elementsIds);
+
+void addSingleElementContingencies(const JavaHandle& analysisContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds);
 
 void addContingencyFromJsonFile(const JavaHandle& analysisContext, const std::string& jsonFilePath);
 

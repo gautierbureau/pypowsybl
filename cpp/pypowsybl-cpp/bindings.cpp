@@ -17,6 +17,9 @@ class PYBIND11_EXPORT PyPowsyblError;
 #include "powsybl-cpp.h"
 #include "pylogging.h"
 #include <iostream>
+#include <atomic>
+#include <climits>
+#include <cstring>
 
 namespace py = pybind11;
 
@@ -94,23 +97,63 @@ std::shared_ptr<dataframe> createDataframe(py::list columnsValues, const std::ve
                 throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected string");
             }
         } else if (type == 1) {
-            try {
-                std::vector<double> values = py::cast<std::vector<double>>(columnsValues[indice]);
-                column->data.length = values.size();
-                column->data.ptr = pypowsybl::copyVectorDouble(values);
+            bool done = false;
+            py::object col = columnsValues[indice];
+            // Fast path: for a numeric numpy array (the common case for data columns), bulk-copy the
+            // contiguous buffer with a single memcpy instead of an element-by-element cast plus a
+            // second copy. forcecast on a numeric-kind array is a plain numeric conversion (no copy
+            // when already float64-contiguous). Textual/object data falls through to the strict cast
+            // below, which still rejects wrong types exactly as before.
+            if (py::isinstance<py::array>(col)) {
+                char kind = py::cast<py::array>(col).dtype().kind();
+                if (kind == 'f' || kind == 'i' || kind == 'u' || kind == 'b') {
+                    py::array_t<double, py::array::c_style | py::array::forcecast> values = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(col);
+                    int length = values.size();
+                    double* buffer = new double[length];
+                    std::memcpy(buffer, values.data(), length * sizeof(double));
+                    column->data.length = length;
+                    column->data.ptr = buffer;
+                    done = true;
+                }
             }
-            catch(const py::cast_error& e) {
-                throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected float");
+            if (!done) {
+                try {
+                    std::vector<double> values = py::cast<std::vector<double>>(col);
+                    column->data.length = values.size();
+                    column->data.ptr = pypowsybl::copyVectorDouble(values);
+                }
+                catch(const py::cast_error& e) {
+                    throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected float");
+                }
             }
         } else if (type == 2 || type == 3) {
-            try {
-                std::vector<int> values = py::cast<std::vector<int>>(columnsValues[indice]);
-                column->data.length = values.size();
-                column->data.ptr = pypowsybl::copyVectorInt(values);
+            bool done = false;
+            py::object col = columnsValues[indice];
+            if (py::isinstance<py::array>(col)) {
+                char kind = py::cast<py::array>(col).dtype().kind();
+                // Only integer/boolean kinds take the fast path: float inputs to an int/bool column are
+                // rejected by the strict cast below, matching the previous behavior (a float is not a
+                // valid int/bool value).
+                if (kind == 'i' || kind == 'u' || kind == 'b') {
+                    py::array_t<int, py::array::c_style | py::array::forcecast> values = py::cast<py::array_t<int, py::array::c_style | py::array::forcecast>>(col);
+                    int length = values.size();
+                    int* buffer = new int[length];
+                    std::memcpy(buffer, values.data(), length * sizeof(int));
+                    column->data.length = length;
+                    column->data.ptr = buffer;
+                    done = true;
+                }
             }
-            catch(const py::cast_error& e) {
-                std::string expected = type == 2 ? "int" : "bool";
-                throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected " + expected);
+            if (!done) {
+                try {
+                    std::vector<int> values = py::cast<std::vector<int>>(col);
+                    column->data.length = values.size();
+                    column->data.ptr = pypowsybl::copyVectorInt(values);
+                }
+                catch(const py::cast_error& e) {
+                    std::string expected = type == 2 ? "int" : "bool";
+                    throw pypowsybl::PyPowsyblError("Data of column \"" + columnsNames[indice] + "\" has the wrong type, expected " + expected);
+                }
             }
         }
     }
@@ -153,10 +196,38 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
     pypowsybl::addDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
 }
 
+// Build a Python list of str directly from the char** buffer of a string series, creating each
+// PyUnicode object in a single pass. This avoids the intermediate std::vector<std::string> (one
+// std::string allocation + copy per element) that py::cast(toVector<std::string>(...)) would build
+// before copying again into the Python strings.
+py::object stringSeriesAsPyList(const series& s) {
+    const array* arr = (const array*) &s.data;
+    Py_ssize_t length = arr->length;
+    char** ptr = (char**) arr->ptr;
+    PyObject* list = PyList_New(length);
+    if (list == nullptr) {
+        throw py::error_already_set();
+    }
+    for (Py_ssize_t i = 0; i < length; i++) {
+        const char* str = ptr[i] ? ptr[i] : "";
+        PyObject* unicode = PyUnicode_FromString(str);
+        if (unicode == nullptr) {
+            Py_DECREF(list);
+            throw py::error_already_set();
+        }
+        PyList_SET_ITEM(list, i, unicode); // steals the reference
+    }
+    return py::reinterpret_steal<py::object>(list);
+}
+
 template<typename T>
-py::array seriesAsNumpyArray(const series& series) {
-	//Last argument is to bind lifetime of series to the returned array
-    return py::array(py::dtype::of<T>(), series.data.length, series.data.ptr, py::cast(series));
+py::array seriesAsNumpyArray(const series& series, py::handle base) {
+    // The numpy array is a zero-copy view over a buffer owned by the SeriesArray (freed in ~Array).
+    // We anchor the view to the owning Series Python object (base), which transitively keeps the
+    // SeriesArray alive (reference_internal iterator + keep_alive on SeriesArray.__iter__/__getitem__),
+    // so the buffer can't be freed while the view is alive. The caller passes the Series object itself
+    // rather than relying on py::cast(series) to return the owning instance.
+    return py::array(py::dtype::of<T>(), series.data.length, series.data.ptr, base);
 }
 
 py::memoryview pyGetGrid2opIntegerValue(const pypowsybl::JavaHandle& backendHandle, Grid2opIntegerValueType valueType) {
@@ -284,7 +355,7 @@ void voltageInitializerBinding(py::module_& m) {
     m.def("voltage_initializer_set_penalty_voltage_target_ratio", &pypowsybl::voltageInitializerSetPenaltyVoltageTargetRatio, py::arg("params_handle"), py::arg("penalty_voltage_target_ratio"));
     m.def("voltage_initializer_set_penalty_voltage_target_data", &pypowsybl::voltageInitializerSetPenaltyVoltageTargetData, py::arg("params_handle"), py::arg("penalty_voltage_target_data"));
 
-    m.def("run_voltage_initializer", &pypowsybl::runVoltageInitializer, py::arg("debug"), py::arg("network_handle"), py::arg("params_handle"));
+    m.def("run_voltage_initializer", &pypowsybl::runVoltageInitializer, py::call_guard<py::gil_scoped_release>(), py::arg("debug"), py::arg("network_handle"), py::arg("params_handle"));
 
     m.def("voltage_initializer_set_log_level_ampl", &pypowsybl::voltageInitializerSetLogLevelAmpl, py::arg("params_handle"), py::arg("log_level_ampl"));
     m.def("voltage_initializer_set_log_level_solver", &pypowsybl::voltageInitializerSetLogLevelSolver, py::arg("params_handle"), py::arg("log_level_solver"));
@@ -481,6 +552,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
           py::arg("network"), py::arg("file"), py::arg("parameters"), py::arg("post_processors"), py::arg("report_node"));
 
     m.def("update_network_from_binary_buffers", updateNetworkFromBinaryBuffersPython, "Update a network from a list of binary buffers",
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("network"), py::arg("buffers"), py::arg("parameters"), py::arg("post_processors"), py::arg("report_node"));
 
     m.def("save_network", &pypowsybl::saveNetwork, "Save network to a file in a given format", py::call_guard<py::gil_scoped_release>(),
@@ -649,11 +721,14 @@ PYBIND11_MODULE(_pypowsybl, m) {
     m.def("run_loadflow", &pypowsybl::runLoadFlow, "Run a load flow", py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"));
 
-    m.def("run_loadflow_async", &runLoadFlowAsyncPython, "Run a load flow asynchronously", py::call_guard<py::gil_scoped_release>(),
+    // no gil_scoped_release: runLoadFlowAsync only submits the task and returns immediately, and the body
+    // does a Py_INCREF on the future which must happen under the GIL (results are delivered later via the
+    // gil-acquiring onLoadFlowResult/onLoadFlowException callbacks)
+    m.def("run_loadflow_async", &runLoadFlowAsyncPython, "Run a load flow asynchronously",
           py::arg("network"), py::arg("variant_id"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"),
           py::arg("results_future"));
 
-    m.def("run_loadflow_validation", &pypowsybl::runLoadFlowValidation, "Run a load flow validation", py::arg("network"),
+    m.def("run_loadflow_validation", &pypowsybl::runLoadFlowValidation, "Run a load flow validation", py::call_guard<py::gil_scoped_release>(), py::arg("network"),
           py::arg("validation_type"), py::arg("validation_parameters"));
 
     py::class_<pypowsybl::SldParameters>(m, "SldParameters")
@@ -758,6 +833,10 @@ PYBIND11_MODULE(_pypowsybl, m) {
 
     m.def("add_contingency", &pypowsybl::addContingency, "Add a contingency to a security analysis or sensitivity analysis",
           py::arg("analysis_context"), py::arg("contingency_id"), py::arg("elements_ids"));
+
+    m.def("add_single_element_contingencies", &pypowsybl::addSingleElementContingencies,
+          "Add several single-element (N-1) contingencies to a security analysis or sensitivity analysis in one call",
+          py::arg("analysis_context"), py::arg("contingency_ids"), py::arg("elements_ids"));
 
     m.def("add_contingency_from_json_file", &pypowsybl::addContingencyFromJsonFile, "Add contingencies from JSON file.",
           py::arg("analysis_context"), py::arg("path_to_json_file"));
@@ -1035,23 +1114,26 @@ PYBIND11_MODULE(_pypowsybl, m) {
             .def_property_readonly("index", [](const series& s) {
                 return (bool) s.index;
             })
-            .def_property_readonly("data", [](const series& s) -> py::object {
+            .def_property_readonly("data", [](py::object self) -> py::object {
+                const series& s = self.cast<const series&>();
                 switch(s.type) {
                     case 0:
-                        return py::cast(pypowsybl::toVector<std::string>((array *) & s.data));
+                        return stringSeriesAsPyList(s);
                     case 1:
-                        return seriesAsNumpyArray<double>(s);
+                        return seriesAsNumpyArray<double>(s, self);
                     case 2:
-                        return seriesAsNumpyArray<int>(s);
+                        return seriesAsNumpyArray<int>(s, self);
                     case 3:
-                        return seriesAsNumpyArray<bool>(s);
+                        return seriesAsNumpyArray<bool>(s, self);
                     default:
                         throw pypowsybl::PyPowsyblError("Series type not supported: " + std::to_string(s.type));
                 }
             })
-            .def_property_readonly("mask", [](const series& s) {
+            .def_property_readonly("mask", [](py::object self) -> py::object {
+                const series& s = self.cast<const series&>();
                 if (s.mask != nullptr) {
-                    return py::array(py::dtype::of<int>(), s.data.length, s.mask, py::cast(s.mask));
+                    // Zero-copy view: keep the owning Series (hence SeriesArray) alive via self as base.
+                    return py::array(py::dtype::of<int>(), s.data.length, s.mask, self);
                 } else {
                     return py::array();
                 }
@@ -1514,12 +1596,22 @@ void runLoadFlowAsyncPython(const pypowsybl::JavaHandle& network, const std::str
                                               (void*) resultsFuturePtr);
 }
 
+// Log level last pushed to the Java side. The Python logger level is synced to Java before each Java
+// call, but it changes very rarely; caching the last pushed value lets us skip the extra native
+// transition into setLogLevel on every call once the level is stable. INT_MIN forces the first sync.
+static std::atomic<int> lastPushedLogLevel{INT_MIN};
+
 void setLogLevelFromPythonLogger(pypowsybl::GraalVmGuard* guard, exception_handler* exc) {
+    // Acquire the GIL before touching the logger py::object: reading it and its "level" attribute
+    // manipulates Python refcounts, which is unsafe when the caller has released the GIL.
+    py::gil_scoped_acquire acquire;
     py::object logger = CppToPythonLogger::get()->getLogger();
     if (!logger.is_none()) {
-        py::gil_scoped_acquire acquire;
-        py::object level = logger.attr("level");
-        ::setLogLevel(guard->thread(), level.cast<int>(), exc);
+        int level = logger.attr("level").cast<int>();
+        if (level != lastPushedLogLevel.load(std::memory_order_relaxed)) {
+            ::setLogLevel(guard->thread(), level, exc);
+            lastPushedLogLevel.store(level, std::memory_order_relaxed);
+        }
      }
 }
 
@@ -1529,7 +1621,7 @@ pypowsybl::JavaHandle loadNetworkFromBinaryBuffersPython(std::vector<py::buffer>
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1559,7 +1651,7 @@ py::bytes saveNetworkToBinaryBufferPython(const pypowsybl::JavaHandle& network, 
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1579,7 +1671,7 @@ void updateNetworkFromBinaryBuffersPython(const pypowsybl::JavaHandle& network, 
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }

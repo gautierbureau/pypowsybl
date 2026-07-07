@@ -11,43 +11,62 @@
 
 namespace pypowsybl {
 
-std::mutex PowsyblCaller::initMutex_;
-PowsyblCaller *PowsyblCaller::singleton_ = nullptr;
 
 graal_isolate_t* isolate = nullptr;
 std::vector<char*> argv;
+
+namespace {
+
+// Keeps the calling thread attached to the isolate for its whole lifetime instead of attaching and
+// detaching on every call. The first call on a thread resolves its isolate thread (attaching it if it
+// is not already attached - the main thread is attached once at init); the thread is detached when it
+// exits, via this thread_local's destructor. Attaching/detaching the isolate per call is one of the
+// most expensive GraalVM operations and shows up on multithreaded workloads (thread pools running load
+// flows, RL env threads).
+class IsolateThreadAttachment {
+public:
+    graal_isolatethread_t* getOrAttach() {
+        if (thread_ == nullptr) {
+            thread_ = graal_get_current_thread(isolate);
+            if (thread_ == nullptr) {
+                int c = graal_attach_thread(isolate, &thread_);
+                if (c != 0) {
+                    throw std::runtime_error("graal_attach_thread error: " + std::to_string(c));
+                }
+                ownsAttachment_ = true;
+            }
+        }
+        return thread_;
+    }
+
+    ~IsolateThreadAttachment() {
+        // best effort, and never throw from a thread-exit destructor; only detach threads we attached
+        // ourselves (never the main thread, which was attached at init)
+        if (ownsAttachment_ && thread_ != nullptr && isolate != nullptr) {
+            graal_detach_thread(thread_);
+        }
+    }
+
+private:
+    graal_isolatethread_t* thread_ = nullptr;
+    bool ownsAttachment_ = false;
+};
+
+thread_local IsolateThreadAttachment isolateThreadAttachment;
+
+}
 
 GraalVmGuard::GraalVmGuard() {
     if (!isolate) {
         throw std::runtime_error("isolate has not been created");
     }
-    //if thread already attached to the isolate,
-    //we assume it's a nested call --> do nothing
-
-    thread_ = graal_get_current_thread(isolate);
-    if (thread_ == nullptr) {
-        int c = graal_attach_thread(isolate, &thread_);
-        if (c != 0) {
-            throw std::runtime_error("graal_attach_thread error: " + std::to_string(c));
-        }
-        shouldDetach = true;
-    }
-}
-
-GraalVmGuard::~GraalVmGuard() noexcept(false) {
-    if (shouldDetach) {
-        int c = graal_detach_thread(thread_);
-        if (c != 0) {
-            throw std::runtime_error("graal_detach_thread error: " + std::to_string(c));
-        }
-    }
+    thread_ = isolateThreadAttachment.getOrAttach();
 }
 PowsyblCaller* PowsyblCaller::get() {
-    std::lock_guard<std::mutex> guard(initMutex_);
-    if (!singleton_) {
-        singleton_ = new PowsyblCaller();
-    }
-    return singleton_;
+    // Meyers singleton: thread-safe initialization guaranteed by the C++11 standard, without paying
+    // a mutex lock on every call (get() is called on every Java call, including from destructors).
+    static PowsyblCaller instance;
+    return &instance;
 }
 
 void PowsyblCaller::setPreprocessingJavaCall(std::function <void(GraalVmGuard* guard, exception_handler* exc)> func) {
@@ -157,8 +176,7 @@ std::vector<std::string> toVector(array* arrayPtr) {
     strings.reserve(arrayPtr->length);
     for (int i = 0; i < arrayPtr->length; i++) {
         char** ptr = (char**) arrayPtr->ptr + i;
-        std::string str = *ptr ? *ptr : "";
-        strings.emplace_back(str);
+        strings.emplace_back(*ptr ? *ptr : ""); // construct in place, no intermediate std::string copy
     }
     return strings;
 }
@@ -286,14 +304,16 @@ void providerParametersFromCStruct(provider_parameters& providerParams, std::vec
 
 std::vector<std::vector<std::string>> arrayToStringVectorVector(array nestedStringVector) {
     std::vector<std::vector<std::string>> mainList;
+    mainList.reserve(nestedStringVector.length);
     for (int i = 0; i < nestedStringVector.length; i++) {
-        std::vector<std::string> subList;
         array value = *((array*) nestedStringVector.ptr + i);
+        std::vector<std::string> subList;
+        subList.reserve(value.length);
         for (int j = 0; j < value.length; j++) {
             char* subValue = *((char**) value.ptr + j);
             subList.push_back(std::string(subValue));
         }
-        mainList.push_back(subList);
+        mainList.push_back(std::move(subList));
     }
     return mainList;
 }
@@ -839,7 +859,7 @@ JavaHandle loadNetwork(const std::string& file, const std::map<std::string, std:
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -857,7 +877,7 @@ JavaHandle loadNetworkFromString(const std::string& fileName, const std::string&
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -876,7 +896,7 @@ void updateNetwork(const JavaHandle& network, const std::string& file, const std
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -894,7 +914,7 @@ void saveNetwork(const JavaHandle& network, const std::string& file, const std::
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -909,7 +929,7 @@ std::string saveNetworkToString(const JavaHandle& network, const std::string& fo
     std::vector<std::string> parameterValues;
     parameterNames.reserve(parameters.size());
     parameterValues.reserve(parameters.size());
-    for (std::pair<std::string, std::string> p : parameters) {
+    for (const auto& p : parameters) {
         parameterNames.push_back(p.first);
         parameterValues.push_back(p.second);
     }
@@ -1122,6 +1142,12 @@ JavaHandle createSecurityAnalysis() {
 void addContingency(const JavaHandle& analysisContext, const std::string& contingencyId, const std::vector<std::string>& elementsIds) {
     ToCharPtrPtr elementIdPtr(elementsIds);
     PowsyblCaller::get()->callJava(::addContingency, analysisContext, (char*) contingencyId.data(), elementIdPtr.get(), elementsIds.size());
+}
+
+void addSingleElementContingencies(const JavaHandle& analysisContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds) {
+    ToCharPtrPtr contingencyIdPtr(contingencyIds);
+    ToCharPtrPtr elementIdPtr(elementIds);
+    PowsyblCaller::get()->callJava(::addSingleElementContingencies, analysisContext, contingencyIdPtr.get(), elementIdPtr.get(), contingencyIds.size());
 }
 
 void addContingencyFromJsonFile(const JavaHandle& analysisContext, const std::string& jsonFilePath) {
@@ -1395,9 +1421,10 @@ void updateNetworkElementsWithSeries(pypowsybl::JavaHandle network, dataframe* d
 
 std::vector<SeriesMetadata> convertDataframeMetadata(dataframe_metadata* dataframeMetadata) {
     std::vector<SeriesMetadata> res;
+    res.reserve(dataframeMetadata->attributes_count);
     for (int i = 0; i < dataframeMetadata->attributes_count; i++) {
         const series_metadata& series = dataframeMetadata->attributes_metadata[i];
-        res.push_back(SeriesMetadata(series.name, series.type, series.is_index, series.is_modifiable, series.is_default));
+        res.emplace_back(series.name, series.type, series.is_index, series.is_modifiable, series.is_default);
     }
     return res;
 }

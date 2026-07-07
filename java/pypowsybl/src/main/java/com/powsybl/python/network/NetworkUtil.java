@@ -311,4 +311,17 @@ public final class NetworkUtil {
                     .findFirst();
         }
     }
+
+    /**
+     * Builds, for a voltage level, a map from bus/breaker view bus id to the containing bus view (merged) bus,
+     * in a single O(number of buses) pass. When iterating over every bus of a voltage level this avoids the
+     * per-bus O(number of buses) fallback scan of {@link #getBusViewBus(Bus)} (which is O(n^2) overall).
+     */
+    public static Map<String, Bus> buildBusViewBusByBusBreakerBusId(VoltageLevel voltageLevel) {
+        Map<String, Bus> busViewBusByBusBreakerBusId = new HashMap<>();
+        voltageLevel.getBusView().getBusStream().forEach(busViewBus ->
+                voltageLevel.getBusBreakerView().getBusStreamFromBusViewBusId(busViewBus.getId())
+                        .forEach(busBreakerBus -> busViewBusByBusBreakerBusId.putIfAbsent(busBreakerBus.getId(), busViewBus)));
+        return busViewBusByBusBreakerBusId;
+    }
 }

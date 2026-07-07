@@ -4,7 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from typing import Dict
+from typing import Dict, Optional
 import pandas as pd
 from prettytable import PrettyTable
 from pypowsybl import _pypowsybl
@@ -29,7 +29,9 @@ class SecurityAnalysisResult:
                 self._post_contingency_results[result.contingency_id] = result
         for result in operator_strategy_results:
             self._operator_strategy_results[result.operator_strategy_id] = result
-        self._limit_violations = create_data_frame_from_series_array(_pypowsybl.get_limit_violations(self._handle))
+        # built lazily on first access: callers that only read post_contingency_results/
+        # pre_contingency_result should not pay the FFI fetch + DataFrame construction
+        self._limit_violations: Optional[pd.DataFrame] = None
 
     @property
     def pre_contingency_result(self) -> PreContingencyResult:
@@ -147,6 +149,9 @@ class SecurityAnalysisResult:
         """
         All limit violations in a dataframe representation.
         """
+        if self._limit_violations is None:
+            self._limit_violations = create_data_frame_from_series_array(
+                _pypowsybl.get_limit_violations(self._handle))
         return self._limit_violations
 
     @property

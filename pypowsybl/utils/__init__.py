@@ -5,7 +5,14 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from .impl.util import (path_to_str, create_data_frame_from_series_array, PathOrStr)
+from .impl.util import (path_to_str, create_data_frame_from_series_array, PathOrStr,
+                        get_network_elements_dataframe_metadata,
+                        get_network_elements_creation_dataframes_metadata,
+                        get_network_extensions_dataframe_metadata,
+                        get_network_extensions_creation_dataframes_metadata,
+                        get_network_modification_metadata,
+                        get_network_modification_metadata_with_element_type)
 from .impl.dataframes import (_to_array, _adapt_kwargs, _adapt_df_or_kwargs, _create_c_dataframe,
+                              _create_c_dataframe_from_kwargs, _get_c_dataframe,
                               _find_index_in_metadata, _add_index_to_kwargs, _create_properties_c_dataframe,
                               _adapt_properties_kwargs, _get_c_dataframes)

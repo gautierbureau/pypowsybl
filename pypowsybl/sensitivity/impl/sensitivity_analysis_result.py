@@ -37,10 +37,15 @@ class SensitivityAnalysisResult:
         return '' if contingency_id is None else contingency_id
 
     def process_ptdf(self, df: pd.DataFrame, matrix_id: str) -> pd.DataFrame:
+        index = self.function_data_frame_index[matrix_id]
+        # fast path: no zone-transfer rows to fold in/remove -> return the matrix as is, avoiding a
+        # per-row Python loop and the unconditional full-matrix copy that df.drop would make
+        if TO_REMOVE not in index:
+            return df
         # substract second power transfer zone to first one
         i = 0
-        while i < len(self.function_data_frame_index[matrix_id]):
-            if self.function_data_frame_index[matrix_id][i] == TO_REMOVE:
+        while i < len(index):
+            if index[i] == TO_REMOVE:
                 df.iloc[i - 1] = df.iloc[i - 1] - df.iloc[i]
             i += 1
         # remove rows corresponding to power transfer second zone

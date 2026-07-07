@@ -10,28 +10,24 @@
 
 using namespace pybind11::literals;
 
-CppToPythonLogger *CppToPythonLogger::singleton_ = nullptr;
-std::mutex CppToPythonLogger::initMutex_;
-
 CppToPythonLogger* CppToPythonLogger::get() {
-    std::lock_guard<std::mutex> guard(initMutex_);
-    if (!singleton_) {
-        singleton_ = new CppToPythonLogger();
-    }
-    return singleton_;
+    // Meyers singleton: thread-safe lazy initialization without a per-call mutex lock.
+    static CppToPythonLogger instance;
+    return &instance;
 }
 
 CppToPythonLogger::CppToPythonLogger()
     : logger_(py::none()) {
 }
 
+// logger_ is only ever accessed with the Python GIL held (setLogger and getLogger run either from
+// Python code or from callbacks that acquire the GIL first), so the GIL already serializes access and
+// no additional mutex is needed. getLogger() was previously taking a global lock on every Java call.
 void CppToPythonLogger::setLogger(py::object& logger) {
-    std::lock_guard<std::mutex> guard(loggerMutex_);
     logger_ = logger;
 }
 
 py::object CppToPythonLogger::getLogger() {
-    std::lock_guard<std::mutex> guard(loggerMutex_);
     return logger_;
 }
 

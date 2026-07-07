@@ -19,8 +19,6 @@ import org.graalvm.word.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.IntFunction;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.powsybl.python.commons.Util.freeCharPtrArray;
 import static com.powsybl.python.commons.Util.getStringListAsPtr;
@@ -40,10 +38,9 @@ public final class CTypeUtil {
         // pybind11 convert std::string and char* to python utf-8 string
         byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
         CCharPointer charPtr = UnmanagedMemory.calloc((bytes.length + 1) * SizeOf.get(CCharPointer.class));
-        for (int i = 0; i < bytes.length; ++i) {
-            charPtr.write(i, bytes[i]);
-        }
-        charPtr.write(bytes.length, (byte) 0);
+        // bulk copy instead of writing one byte at a time
+        CTypeConversion.asByteBuffer(charPtr, bytes.length).put(bytes);
+        charPtr.write(bytes.length, (byte) 0); // null terminator (calloc already zeroed it)
         return charPtr;
     }
 
@@ -52,9 +49,8 @@ public final class CTypeUtil {
             return WordFactory.nullPointer();
         }
         CCharPointer charPtr = UnmanagedMemory.calloc(bytes.length * SizeOf.get(CCharPointer.class));
-        for (int i = 0; i < bytes.length; ++i) {
-            charPtr.write(i, bytes[i]);
-        }
+        // bulk copy instead of writing one byte at a time
+        CTypeConversion.asByteBuffer(charPtr, bytes.length).put(bytes);
         return charPtr;
     }
 
@@ -132,9 +128,11 @@ public final class CTypeUtil {
                                                   CCharPointerPointer valuesPointer, int valuesCount) {
         List<String> keys = toStringList(keysPointer, keysCount);
         List<String> values = toStringList(valuesPointer, valuesCount);
-        return IntStream.range(0, keys.size())
-                .boxed()
-                .collect(Collectors.toMap(keys::get, values::get));
+        Map<String, String> map = new HashMap<>(keys.size());
+        for (int i = 0; i < keys.size(); i++) {
+            map.put(keys.get(i), values.get(i));
+        }
+        return map;
     }
 
     public static StringMap fromStringMap(Map<String, String> stringMap) {

@@ -10,9 +10,11 @@ package com.powsybl.dataframe;
 import com.powsybl.dataframe.update.UpdatingDataframe;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Define filters to apply to a dataframe.
@@ -24,6 +26,7 @@ public class DataframeFilter {
 
     private final AttributeFilterType attributeFilterType;
     private final List<String> inputAttributes;
+    private final Set<String> inputAttributesSet;
     private final UpdatingDataframe selectingDataframe;
 
     public enum AttributeFilterType {
@@ -35,6 +38,7 @@ public class DataframeFilter {
     public DataframeFilter(AttributeFilterType attributeFilterType, List<String> inputAttributes, UpdatingDataframe selectingDataframe) {
         this.attributeFilterType = Objects.requireNonNull(attributeFilterType);
         this.inputAttributes = Objects.requireNonNull(inputAttributes);
+        this.inputAttributesSet = new HashSet<>(inputAttributes);
         this.selectingDataframe = selectingDataframe;
     }
 
@@ -52,6 +56,14 @@ public class DataframeFilter {
 
     public List<String> getInputAttributes() {
         return inputAttributes;
+    }
+
+    /**
+     * Whether the given attribute name is part of the input attributes. O(1) lookup, unlike
+     * {@code getInputAttributes().contains(name)} which is linear and called once per column.
+     */
+    public boolean isInputAttribute(String name) {
+        return inputAttributesSet.contains(name);
     }
 
     public Optional<UpdatingDataframe> getSelectingDataframe() {
