@@ -35,6 +35,34 @@ ConnectedComponentMode.__module__ = __name__
 ComponentMode.__module__ = __name__
 
 
+# Building the default LoadFlowParameters does a round trip into Java (createLoadFlowParameters,
+# plus a free callback). When the caller passes no parameters - the common case, e.g. repeated
+# load flows in a loop - cache the default per mode once and reuse it instead of rebuilding it on
+# every call. run_loadflow takes the parameters by const reference and never mutates them (verified),
+# so sharing a single read-only instance is safe, including across threads; the cached objects are
+# never mutated after creation.
+_DEFAULT_AC_PARAMETERS: Optional[_pypowsybl.LoadFlowParameters] = None
+_DEFAULT_DC_PARAMETERS: Optional[_pypowsybl.LoadFlowParameters] = None
+
+
+def _default_ac_parameters() -> _pypowsybl.LoadFlowParameters:
+    global _DEFAULT_AC_PARAMETERS
+    if _DEFAULT_AC_PARAMETERS is None:
+        params = _pypowsybl.LoadFlowParameters()
+        params.dc = False
+        _DEFAULT_AC_PARAMETERS = params
+    return _DEFAULT_AC_PARAMETERS
+
+
+def _default_dc_parameters() -> _pypowsybl.LoadFlowParameters:
+    global _DEFAULT_DC_PARAMETERS
+    if _DEFAULT_DC_PARAMETERS is None:
+        params = _pypowsybl.LoadFlowParameters()
+        params.dc = True
+        _DEFAULT_DC_PARAMETERS = params
+    return _DEFAULT_DC_PARAMETERS
+
+
 def run_ac(network: Network, parameters: Optional[Parameters] = None, provider: str = '',
            report_node: Optional[ReportNode] = None) -> List[ComponentResult]:  # pylint: disable=protected-access
     """
@@ -49,8 +77,11 @@ def run_ac(network: Network, parameters: Optional[Parameters] = None, provider: 
     Returns:
         A list of component results, one for each component of the network.
     """
-    p = parameters._to_c_parameters() if parameters is not None else _pypowsybl.LoadFlowParameters()  # pylint: disable=protected-access
-    p.dc = False
+    if parameters is not None:
+        p = parameters._to_c_parameters()  # pylint: disable=protected-access
+        p.dc = False
+    else:
+        p = _default_ac_parameters()
     return [ComponentResult(res) for res in _pypowsybl.run_loadflow(network._handle, p, provider,
                                                                     None if report_node is None else report_node._report_node)]  # pylint: disable=protected-access
 
@@ -70,8 +101,11 @@ def run_ac_async(network: Network, variant_id: str = 'InitialState', parameters:
     Returns:
         A future list of component results, one for each component of the network.
     """
-    c_parameters = parameters._to_c_parameters() if parameters is not None else _pypowsybl.LoadFlowParameters()  # pylint: disable=protected-access
-    c_parameters.dc = False
+    if parameters is not None:
+        c_parameters = parameters._to_c_parameters()  # pylint: disable=protected-access
+        c_parameters.dc = False
+    else:
+        c_parameters = _default_ac_parameters()
     loop = asyncio.get_running_loop()
     results_future = loop.create_future()
     _pypowsybl.run_loadflow_async(network._handle,
@@ -97,8 +131,11 @@ def run_dc(network: Network, parameters: Optional[Parameters] = None, provider: 
     Returns:
         A list of component results, one for each component of the network.
     """
-    p = parameters._to_c_parameters() if parameters is not None else _pypowsybl.LoadFlowParameters()  # pylint: disable=protected-access
-    p.dc = True
+    if parameters is not None:
+        p = parameters._to_c_parameters()  # pylint: disable=protected-access
+        p.dc = True
+    else:
+        p = _default_dc_parameters()
     return [ComponentResult(res) for res in _pypowsybl.run_loadflow(network._handle, p, provider,
                                                                     None if report_node is None else report_node._report_node)]  # pylint: disable=protected-access
 
