@@ -155,6 +155,28 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         return count;
     }
 
+    // Resolve a variable's SensitivityVariableType for the adjoint factor build, mirroring the per-variable
+    // logic the old cross-product loop used inline: the matrix's declared type, else inferred from the
+    // network, else a variable set (INJECTION_ACTIVE_POWER). isVariableSetOut[0] receives the variable-set flag.
+    private SensitivityVariableType resolveAdjointVariableType(Network network, String variableId, MatrixInfo matrix,
+                                                              Map<String, SensitivityVariableSet> variableSetsById,
+                                                              boolean[] isVariableSetOut) {
+        SensitivityVariableType variableType = matrix.getVariableType();
+        isVariableSetOut[0] = false;
+        if (variableType == null) {
+            variableType = getVariableType(network, variableId);
+            if (variableType == null) {
+                if (variableSetsById.containsKey(variableId)) {
+                    isVariableSetOut[0] = true;
+                    variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
+                } else {
+                    throw new PowsyblException("Variable '" + variableId + "' not found");
+                }
+            }
+        }
+        return variableType;
+    }
+
     private SensitivityVariableType getVariableType(Network network, String variableId) {
         Identifiable<?> identifiable = network.getIdentifiable(variableId);
         if (identifiable instanceof Injection<?>) {
@@ -308,42 +330,72 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         Map<String, SensitivityVariableSet> variableSetsById = variableSets.stream()
                 .collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
 
+        // Reverse mode needs only an O(functions + variables) factor set, NOT the functions×variables cross
+        // product: one factor per function feeds x̄ (through the cotangent map); one factor per variable
+        // creates its θ̄ group; the self-pair (a variable that is itself a monitored function, e.g. a branch
+        // admittance on its own flow) carries the direct term. This reproduces the full cross product exactly
+        // (validated in OLF AcSensitivityAnalysisAdjointTest#runAdjointMinimalFactorSetMatchesFull*), turning a
+        // ~F·V allocation (millions of factors on a real case) into ~F+V.
         List<SensitivityFactor> factors = new ArrayList<>();
         Map<String, Double> cotangentByFunctionId = new HashMap<>();
+        Set<String> emittedPairs = new HashSet<>();     // "functionType|resolvedFunctionId|variableId" dedup
+        Set<String> variablesWithGroup = new HashSet<>();
 
         for (MatrixInfo matrix : matrices) {
             List<String> columns = matrix.getColumnIds();
             List<String> rows = matrix.getRowIds();
+            SensitivityFunctionType functionType = matrix.getFunctionType();
 
             // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector
             for (int j = 0; j < columns.size(); j++) {
-                String functionId = SensitivityFactor.resolveBusId(columns.get(j), matrix.getFunctionType(), network);
+                String functionId = SensitivityFactor.resolveBusId(columns.get(j), functionType, network);
                 // key by (functionType, functionId): a branch monitored by several function types (current
                 // and active power) shares one id, so keying by id alone would merge their cotangents.
-                cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(matrix.getFunctionType(), functionId),
+                cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
                         functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
             }
 
-            // (function, variable) factors, base case only (the adjoint ignores contingencies)
+            // x̄: one factor per function, paired with the first variable (base case only — adjoint ignores contingencies)
+            String v0 = rows.get(0);
+            boolean[] v0Set = new boolean[1];
+            SensitivityVariableType v0Type = resolveAdjointVariableType(network, v0, matrix, variableSetsById, v0Set);
+            for (String functionId : columns) {
+                String rf = SensitivityFactor.resolveBusId(functionId, functionType, network);
+                if (emittedPairs.add(functionType.name() + '|' + rf + '|' + v0)) {
+                    factors.add(new SensitivityFactor(functionType, rf, v0Type, v0, v0Set[0], ContingencyContext.none()));
+                }
+            }
+            variablesWithGroup.add(v0);
+
+            // self-pair (direct term): a variable that is itself a monitored function in this matrix
+            Set<String> rawColumns = new HashSet<>(columns);
             for (String variableId : rows) {
-                SensitivityVariableType variableType = matrix.getVariableType();
-                boolean variableSet = false;
-                if (variableType == null) {
-                    variableType = getVariableType(network, variableId);
-                    if (variableType == null) {
-                        if (variableSetsById.containsKey(variableId)) {
-                            variableSet = true;
-                            variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
-                        } else {
-                            throw new PowsyblException("Variable '" + variableId + "' not found");
-                        }
+                if (rawColumns.contains(variableId)) {
+                    boolean[] vSet = new boolean[1];
+                    SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, matrix, variableSetsById, vSet);
+                    String rf = SensitivityFactor.resolveBusId(variableId, functionType, network);
+                    if (emittedPairs.add(functionType.name() + '|' + rf + '|' + variableId)) {
+                        factors.add(new SensitivityFactor(functionType, rf, vType, variableId, vSet[0], ContingencyContext.none()));
                     }
+                    variablesWithGroup.add(variableId);
                 }
-                for (String functionId : columns) {
-                    String finalFunctionId = SensitivityFactor.resolveBusId(functionId, matrix.getFunctionType(), network);
-                    factors.add(new SensitivityFactor(matrix.getFunctionType(), finalFunctionId, variableType, variableId,
-                            variableSet, ContingencyContext.none()));
+            }
+        }
+
+        // group guarantee: every variable needs a θ̄ group. v0 and self-pair variables have one; give the
+        // rest (e.g. shunts, never a monitored function) one factor with a fixed function whose direct term
+        // is 0 for them (safe — see the OLF test). Rows are the same variable set across matrices.
+        MatrixInfo m0 = matrices.get(0);
+        SensitivityFunctionType ft0 = m0.getFunctionType();
+        String f0 = SensitivityFactor.resolveBusId(m0.getColumnIds().get(0), ft0, network);
+        for (String variableId : m0.getRowIds()) {
+            if (!variablesWithGroup.contains(variableId)) {
+                boolean[] vSet = new boolean[1];
+                SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, m0, variableSetsById, vSet);
+                if (emittedPairs.add(ft0.name() + '|' + f0 + '|' + variableId)) {
+                    factors.add(new SensitivityFactor(ft0, f0, vType, variableId, vSet[0], ContingencyContext.none()));
                 }
+                variablesWithGroup.add(variableId);
             }
         }
 
