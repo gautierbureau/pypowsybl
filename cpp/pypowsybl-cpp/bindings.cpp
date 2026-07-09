@@ -350,7 +350,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
 
     m.def("update_switch_position", &pypowsybl::updateSwitchPosition, "Update a switch position");
 
-    m.def("merge", &pypowsybl::merge, "Merge several networks");
+    m.def("merge", &pypowsybl::merge, "Merge several networks", py::call_guard<py::gil_scoped_release>());
 
     m.def("get_sub_network", &pypowsybl::getSubNetwork, "Get a sub network from its ID", py::arg("network"), py::arg("sub_network_id"));
 
@@ -707,32 +707,40 @@ PYBIND11_MODULE(_pypowsybl, m) {
         .def_readwrite("voltage_level_legends_included", &pypowsybl::NadParameters::voltage_level_legends_included);
 
     m.def("write_single_line_diagram_svg", &pypowsybl::writeSingleLineDiagramSvg, "Write single line diagram SVG",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("container_id"), py::arg("svg_file"), py::arg("metadata_file"), py::arg("sld_parameters"), py::arg("labels"), py::arg("feeders_info"), py::arg("styles"));
 
     m.def("write_matrix_multi_substation_single_line_diagram_svg", &pypowsybl::writeMatrixMultiSubstationSingleLineDiagramSvg, "Write matrix multi-substation single line diagram SVG",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("matrix_ids"), py::arg("svg_file"), py::arg("metadata_file"), py::arg("sld_parameters"), py::arg("labels"), py::arg("feeders_info"), py::arg("styles"));
 
     m.def("get_single_line_diagram_svg", &pypowsybl::getSingleLineDiagramSvg, "Get single line diagram SVG as a string",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("container_id"));
 
     m.def("get_single_line_diagram_svg_and_metadata", &pypowsybl::getSingleLineDiagramSvgAndMetadata, "Get single line diagram SVG and its metadata as a list of strings",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("container_id"), py::arg("sld_parameters"), py::arg("labels"), py::arg("feeders_info"), py::arg("styles"));
 
     m.def("get_matrix_multi_substation_single_line_diagram_svg_and_metadata", &pypowsybl::getMatrixMultiSubstationSvgAndMetadata, "Get matrix multi-substation single line diagram SVG and its metadata as a list of strings",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("matrix_ids"), py::arg("sld_parameters"), py::arg("labels"), py::arg("feeders_info"), py::arg("styles"));
 
     m.def("get_single_line_diagram_component_library_names", &pypowsybl::getSingleLineDiagramComponentLibraryNames, "Get supported component library providers for single line diagram");
 
     m.def("write_network_area_diagram_svg", &pypowsybl::writeNetworkAreaDiagramSvg, "Write network area diagram SVG",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("svg_file"), py::arg("metadata_file"), py::arg("voltage_level_ids"),
           py::arg("depth"), py::arg("high_nominal_voltage_bound"), py::arg("low_nominal_voltage_bound"), py::arg("nad_parameters"), py::arg("fixed_positions"),
           py::arg("branch_labels"), py::arg("three_wt_labels"), py::arg("injections_labels"), py::arg("bus_descriptions"), py::arg("vl_descriptions"),
           py::arg("bus_node_styles"), py::arg("edge_styles"), py::arg("three_wt_styles"));
 
     m.def("get_network_area_diagram_svg", &pypowsybl::getNetworkAreaDiagramSvg, "Get network area diagram SVG as a string",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("voltage_level_ids"), py::arg("depth"), py::arg("high_nominal_voltage_bound"), py::arg("low_nominal_voltage_bound"), py::arg("nad_parameters"));
-          
+
     m.def("get_network_area_diagram_svg_and_metadata", &pypowsybl::getNetworkAreaDiagramSvgAndMetadata, "Get network area diagram SVG and its metadata as a list of strings",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("voltage_level_ids"), py::arg("depth"), py::arg("high_nominal_voltage_bound"), py::arg("low_nominal_voltage_bound"), py::arg("nad_parameters"), py::arg("fixed_positions"),
           py::arg("branch_labels"), py::arg("three_wt_labels"), py::arg("injections_labels"), py::arg("bus_descriptions"), py::arg("vl_descriptions"), py::arg("bus_node_styles"), py::arg("edge_styles"), py::arg("three_wt_styles"));
 
@@ -1150,7 +1158,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
           py::arg("result"));
     m.def("get_three_windings_transformer_results", &pypowsybl::getThreeWindingsTransformerResults,
           "create a table with all three windings transformer results computed after security analysis", py::arg("result"));
-    m.def("create_element", ::createElementBind, "create a new element on the network", py::arg("network"),  py::arg("dataframes"),  py::arg("elementType"));
+    m.def("create_element", ::createElementBind, "create a new element on the network", py::call_guard<py::gil_scoped_release>(), py::arg("network"),  py::arg("dataframes"),  py::arg("elementType"));
 
     py::enum_<validation_level_type>(m, "ValidationLevel")
         .value("EQUIPMENT", validation_level_type::EQUIPMENT)
@@ -1258,9 +1266,10 @@ PYBIND11_MODULE(_pypowsybl, m) {
 
     m.def("get_network_modification_metadata_with_element_type", &pypowsybl::getModificationMetadataWithElementType, "Get network modification metadata with element type", py::arg("network_modification_type"), py::arg("element_type"));
 
-    m.def("create_network_modification", ::createNetworkModificationBind, "Create and apply network modification", py::arg("network"), py::arg("dataframe"), py::arg("network_modification_type"), py::arg("raise_exception"), py::arg("report_node"));
+    m.def("create_network_modification", ::createNetworkModificationBind, "Create and apply network modification", py::call_guard<py::gil_scoped_release>(), py::arg("network"), py::arg("dataframe"), py::arg("network_modification_type"), py::arg("raise_exception"), py::arg("report_node"));
 
     m.def("split_or_merge_transformers", &pypowsybl::splitOrMergeTransformers, "Replace 3-windings transformers with 3 2-windings transformers",
+          py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("transformer_ids"), py::arg("merge"), py::arg("report_node"));
 
     m.def("create_scalable", &pypowsybl::createScalable, "Create a Scalable", py::arg("type"), py::arg("injection_id"),
