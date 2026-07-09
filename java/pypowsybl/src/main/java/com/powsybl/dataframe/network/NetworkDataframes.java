@@ -1604,8 +1604,7 @@ public final class NetworkDataframes {
                 .ints("node", g -> getNode(g.getTerminal()), false)
                 .strings("bus_breaker_bus_id", injection -> getBusBreakerViewBusId(injection.getTerminal()), (injection, id) -> setBusBreakerViewBusId(injection.getTerminal(), id), false)
                 .booleans("connected", injection -> injection.getTerminal().isConnected(), connectInjection())
-                .strings("bus_id", injection -> injection.getTerminal().getBusView().getBus() == null ? "" :
-                        injection.getTerminal().getBusView().getBus().getId())
+                .strings("bus_id", injection -> getBusId(injection.getTerminal()))
                 .doubles("p", getPerUnitP(), setPerUnitP())
                 .doubles("q", getPerUnitQ(), setPerUnitQ())
                 .doubles("i", (l, context) -> perUnitI(context, l.getTerminal()))
@@ -1619,15 +1618,13 @@ public final class NetworkDataframes {
                 .strings("voltage_level1_id", branch -> branch.getTerminal1().getVoltageLevel().getId())
                 .ints("node1", g -> getNode(g.getTerminal1()), false)
                 .strings("bus_breaker_bus1_id", branch -> getBusBreakerViewBusId(branch.getTerminal1()), (branch, id) -> setBusBreakerViewBusId(branch.getTerminal1(), id), false)
-                .strings("bus1_id", branch -> branch.getTerminal1().getBusView().getBus() == null ? "" :
-                        branch.getTerminal1().getBusView().getBus().getId())
+                .strings("bus1_id", branch -> getBusId(branch.getTerminal1()))
                 .booleans("connected1", branch -> branch.getTerminal1().isConnected(),
                     (branch, connected) -> setConnected(branch.getTerminal1(), connected))
                 .strings("voltage_level2_id", branch -> branch.getTerminal2().getVoltageLevel().getId())
                 .ints("node2", g -> getNode(g.getTerminal2()), false)
                 .strings("bus_breaker_bus2_id", branch -> getBusBreakerViewBusId(branch.getTerminal2()), (branch, id) -> setBusBreakerViewBusId(branch.getTerminal2(), id), false)
-                .strings("bus2_id", branch -> branch.getTerminal2().getBusView().getBus() == null ? "" :
-                        branch.getTerminal2().getBusView().getBus().getId())
+                .strings("bus2_id", branch -> getBusId(branch.getTerminal2()))
                 .booleans("connected2", branch -> branch.getTerminal2().isConnected(),
                     (branch, connected) -> setConnected(branch.getTerminal2(), connected))
                 .doubles("p1", getPerUnitP1(), setPerUnitP1())
@@ -1649,8 +1646,7 @@ public final class NetworkDataframes {
                         NetworkDataframes::getTerminal)
                 .stringsIndex("element_id", terminal -> terminal.getConnectable().getId())
                 .strings("voltage_level_id", terminal -> terminal.getVoltageLevel().getId())
-                .strings("bus_id", terminal -> terminal.getBusView().getBus() == null ? "" :
-                        terminal.getBusView().getBus().getId())
+                .strings("bus_id", terminal -> getBusId(terminal))
                 .strings("element_side", terminal -> terminal.getConnectable() instanceof Branch ?
                                 ((Branch<?>) terminal.getConnectable()).getSide(terminal).toString() : "",
                     (terminal, element_side) -> Function.identity())
