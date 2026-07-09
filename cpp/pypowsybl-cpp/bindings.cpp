@@ -1207,6 +1207,9 @@ PYBIND11_MODULE(_pypowsybl, m) {
     m.def("add_contingency_for_flow_decomposition", &pypowsybl::addContingencyForFlowDecomposition, "Add a contingency for flow decomposition",
           py::arg("flow_decomposition_context"), py::arg("contingency_id"), py::arg("elements_ids"));
 
+    m.def("add_single_element_contingencies_for_flow_decomposition", &pypowsybl::addSingleElementContingenciesForFlowDecomposition, "Add a single-element N-1 contingency for each element in one native call",
+          py::arg("flow_decomposition_context"), py::arg("contingency_ids"), py::arg("element_ids"));
+
     m.def("add_precontingency_monitored_elements_for_flow_decomposition", &pypowsybl::addPrecontingencyMonitoredElementsForFlowDecomposition, "Add elements before contingency to be monitored for a flow decomposition",
           py::arg("flow_decomposition_context"), py::arg("branch_ids"));
 

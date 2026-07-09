@@ -956,6 +956,8 @@ JavaHandle createFlowDecomposition();
 
 void addContingencyForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::string& contingencyId, const std::vector<std::string>& elementsIds);
 
+void addSingleElementContingenciesForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::vector<std::string>& contingencyIds, const std::vector<std::string>& elementIds);
+
 void addPrecontingencyMonitoredElementsForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::vector<std::string>& branchIds);
 
 void addPostcontingencyMonitoredElementsForFlowDecomposition(const JavaHandle& flowDecompositionContext, const std::vector<std::string>& branchIds, const std::vector<std::string>& contingencyIds);
