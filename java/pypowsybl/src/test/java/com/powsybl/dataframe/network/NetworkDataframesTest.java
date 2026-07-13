@@ -110,6 +110,32 @@ class NetworkDataframesTest {
                 .containsExactly(0, 0, 0, 0);
         assertThat(series.get(6).getStrings())
                 .containsExactly("VLGEN", "VLHV1", "VLHV2", "VLLOAD");
+
+        List<Series> allAttributeSeries = createDataFrame(BUS, network, new DataframeFilter(ALL_ATTRIBUTES, Collections.emptyList()));
+        assertThat(allAttributeSeries)
+                .extracting(Series::getName)
+                .contains("fictitious", "fictitious_p0", "fictitious_q0");
+    }
+
+    @Test
+    void busesFictitiousInjectionUpdate() {
+        Network network = EurostagTutorialExample1Factory.create();
+
+        DefaultUpdatingDataframe dataframe = new DefaultUpdatingDataframe(1);
+        dataframe.addSeries("id", true, new TestStringSeries("VLGEN_0"));
+        dataframe.addSeries("fictitious_p0", false, new TestDoubleSeries(1.0));
+        dataframe.addSeries("fictitious_q0", false, new TestDoubleSeries(2.0));
+        NetworkDataframeMapper mapper = NetworkDataframes.getDataframeMapper(BUS);
+        mapper.updateSeries(network, dataframe, NetworkDataframeContext.DEFAULT);
+
+        Bus bus = network.getBusView().getBus("VLGEN_0");
+        assertEquals(1.0, bus.getFictitiousP0(), 0.0);
+        assertEquals(2.0, bus.getFictitiousQ0(), 0.0);
+
+        Map<String, Series> attributes = createDataFrame(BUS, network, new DataframeFilter(ALL_ATTRIBUTES, Collections.emptyList()))
+                .stream().collect(ImmutableMap.toImmutableMap(Series::getName, Function.identity()));
+        assertThat(attributes.get("fictitious_p0").getDoubles()).contains(1.0);
+        assertThat(attributes.get("fictitious_q0").getDoubles()).contains(2.0);
     }
 
     @Test

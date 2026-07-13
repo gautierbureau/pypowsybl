@@ -316,6 +316,20 @@ def test_buses():
     pd.testing.assert_frame_equal(expected, buses, check_dtype=False)
 
 
+def test_bus_fictitious_injection():
+    n = pp.network.create_eurostag_tutorial_example1_network()
+    buses = n.get_buses(all_attributes=True)
+    assert 'fictitious_p0' in buses.columns
+    assert 'fictitious_q0' in buses.columns
+    assert buses['fictitious_p0']['VLGEN_0'] == 0
+    assert buses['fictitious_q0']['VLGEN_0'] == 0
+
+    n.update_buses(pd.DataFrame(index=['VLGEN_0'], columns=['fictitious_p0', 'fictitious_q0'], data=[[10.0, 20.0]]))
+    buses = n.get_buses(all_attributes=True)
+    assert buses['fictitious_p0']['VLGEN_0'] == 10.0
+    assert buses['fictitious_q0']['VLGEN_0'] == 20.0
+
+
 def test_loads_data_frame():
     n = pp.network.create_eurostag_tutorial_example1_network()
     loads = n.get_loads(all_attributes=True)
