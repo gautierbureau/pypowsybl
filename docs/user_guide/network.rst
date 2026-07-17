@@ -221,6 +221,12 @@ including the multi-table creations (e.g. tap changers with their steps). In tha
 column(s) (e.g. ``id``, or ``id`` together with ``position``) must be present as regular
 columns, since there is no index to read them from.
 
+Optional (nullable) values are represented with native polars nulls instead of the
+``NaN`` / masked values used by pandas. Apart from the index-vs-column difference, the
+two backends return identical data. Avoiding the pandas index machinery also makes the
+polars conversion measurably faster (roughly 1.5x–3x on both the read and the write
+path in informal benchmarks on the IEEE 300-bus network).
+
 Updating network elements
 -------------------------
 
