@@ -224,8 +224,9 @@ columns, since there is no index to read them from.
 Optional (nullable) values are represented with native polars nulls instead of the
 ``NaN`` / masked values used by pandas. Apart from the index-vs-column difference, the
 two backends return identical data. Avoiding the pandas index machinery also makes the
-polars conversion measurably faster (roughly 1.5x–3x on both the read and the write
-path in informal benchmarks on the IEEE 300-bus network).
+polars conversion measurably faster: on the PEGASE 9241-bus case (~38k elements) the
+read conversion is about 1.4x–1.8x faster and the write conversion (dataframe to the
+native engine) about 1.8x–2.1x faster than pandas.
 
 Updating network elements
 -------------------------
