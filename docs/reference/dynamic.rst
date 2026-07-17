@@ -79,6 +79,7 @@ Parameters
     :toctree: api/
 
     Parameters
+    ModelConfig
     Simulation.get_provider_parameters
     Simulation.get_provider_parameters_names
 

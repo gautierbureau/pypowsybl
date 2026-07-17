@@ -4,8 +4,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
+import json
+import os
 import pypowsybl as pp
 import pypowsybl.dynamic as dyn
+from pypowsybl.dynamic.impl.model_config import serialize_model_configs
 import pytest
 import pandas as pd
 import pypowsybl.network as pn
@@ -205,6 +208,46 @@ def test_parameters():
     assert 100.0 == parameters.stop_time
     assert 'IDA'== parameters.provider_parameters['solver.type']
     assert '1e-5' == parameters.provider_parameters['precision']
+
+
+def test_model_config_serialization():
+    load = dyn.ModelConfig(category='BASE_LOAD', lib='MyLoadPQ', doc='Custom load',
+                           properties=['CONTROLLABLE'], min_version='1.7.0')
+    aliased = dyn.ModelConfig(category='BASE_LOAD', lib='OtherLoad', alias='LoadAlias',
+                              internal_model_prefix='PFX', end_cause='deprecated')
+    gen = dyn.ModelConfig(category='SYNCHRONOUS_GENERATOR', lib='GenX')
+    assert load.name == 'MyLoadPQ'
+    assert aliased.name == 'LoadAlias'
+    catalog = serialize_model_configs([load, aliased, gen])
+    assert set(catalog.keys()) == {'BASE_LOAD', 'SYNCHRONOUS_GENERATOR'}
+    assert catalog['BASE_LOAD']['libs'][0] == {
+        'lib': 'MyLoadPQ', 'doc': 'Custom load', 'properties': ['CONTROLLABLE'], 'minVersion': '1.7.0'}
+    assert catalog['BASE_LOAD']['libs'][1] == {
+        'lib': 'OtherLoad', 'alias': 'LoadAlias', 'internalModelPrefix': 'PFX', 'endCause': 'deprecated'}
+    assert catalog['SYNCHRONOUS_GENERATOR']['libs'][0] == {'lib': 'GenX'}
+
+
+def test_default_parameters_no_additional_models():
+    parameters = dyn.Parameters()
+    assert parameters.additional_models == []
+    with parameters._additional_models_file() as models_file:
+        assert models_file is None
+        c_parameters = parameters._to_c_parameters(models_file)
+    assert 'additionalModelsFile' not in c_parameters.provider_parameters_keys
+
+
+def test_additional_models_serialized_and_wired():
+    load = dyn.ModelConfig(category='BASE_LOAD', lib='MyLoadPQ', doc='Custom load')
+    parameters = dyn.Parameters(start_time=1, stop_time=2, additional_models=[load])
+    with parameters._additional_models_file() as models_file:
+        assert models_file is not None and os.path.exists(models_file)
+        with open(models_file, encoding='utf-8') as fic:
+            assert json.load(fic) == {'BASE_LOAD': {'libs': [{'lib': 'MyLoadPQ', 'doc': 'Custom load'}]}}
+        c_parameters = parameters._to_c_parameters(models_file)
+        provider = dict(zip(c_parameters.provider_parameters_keys, c_parameters.provider_parameters_values))
+        assert provider['additionalModelsFile'] == models_file
+    # temporary file is cleaned up once the context exits
+    assert not os.path.exists(models_file)
 
 
 def test_synchronous_generator_properties():
