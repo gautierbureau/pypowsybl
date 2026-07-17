@@ -196,6 +196,27 @@ This allows to easily get steps related to just one transformer:
 For a detailed description of each dataframe, please refer
 to the reference API :doc:`documentation </reference/network>`.
 
+Polars backend (experimental)
+.............................
+
+Getters such as :meth:`~pypowsybl.network.Network.get_generators` accept an optional
+``backend`` argument. By default (``backend='pandas'``) a :class:`pandas.DataFrame` is
+returned. With ``backend='polars'`` a :class:`polars.DataFrame` is returned instead.
+This requires the optional ``polars`` dependency (``pip install pypowsybl[polars]``).
+
+Because polars has no row-index concept, the columns that pandas exposes as an index
+(the element IDs, and any composite key) are returned as regular leading columns:
+
+.. code-block:: python
+
+    >>> df = network.get_generators(backend='polars')  # doctest: +SKIP
+    >>> df.columns[0]                                   # doctest: +SKIP
+    'id'
+
+Update methods such as :meth:`~pypowsybl.network.Network.update_generators` likewise accept
+a :class:`polars.DataFrame`; in that case the key column(s) (e.g. ``id``) must be present as
+regular columns, since there is no index to read them from.
+
 Updating network elements
 -------------------------
 

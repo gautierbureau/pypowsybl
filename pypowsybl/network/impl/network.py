@@ -21,8 +21,11 @@ from typing import (
     Dict,
     Optional,
     Union,
-    Any, Type, Literal
+    Any, Type, Literal, TYPE_CHECKING
 )
+
+if TYPE_CHECKING:
+    import polars as pl  # optional dependency, only imported for type checking
 
 from numpy import inf
 from numpy.typing import ArrayLike
@@ -34,6 +37,8 @@ from pypowsybl._pypowsybl import ElementType, ValidationLevel
 from pypowsybl.utils import (
     _adapt_df_or_kwargs,
     _create_c_dataframe,
+    _create_c_dataframe_from_polars,
+    _is_polars_dataframe,
     _create_properties_c_dataframe,
     _adapt_properties_kwargs,
     _get_c_dataframes,
@@ -48,7 +53,7 @@ from .edge_info_parameters import EdgeInfoParameters
 from .nad_profile import NadProfile
 from .sld_profile import SldProfile
 from .svg import Svg
-from .util import create_data_frame_from_series_array, ParamsDict
+from .util import create_data_frame_from_series_array, create_polars_frame_from_series_array, ParamsDict
 
 
 class WorkingVariantScope:
@@ -684,7 +689,7 @@ class Network:  # pylint: disable=too-many-public-methods
                                             not_connected_to_same_bus_at_both_sides)
 
     def get_elements(self, element_type: ElementType, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                     **kwargs: ArrayLike) -> DataFrame:
+                     backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get network elements as a :class:`~pandas.DataFrame` for a specified element type.
 
@@ -692,6 +697,9 @@ class Network:  # pylint: disable=too-many-public-methods
             element_type: the element type
             all_attributes: flag for including all attributes in the dataframe, default is false
             attributes: attributes to include in the dataframe. The 2 optional parameters are mutually exclusive. If no optional parameter is specified, the dataframe will include the default attributes.
+            backend: the dataframe library used for the result, either ``'pandas'`` (default) or ``'polars'``.
+                     With ``'polars'`` the element IDs are returned as regular leading columns instead of a
+                     :class:`~pandas.Index`, since polars has no row index. Requires the optional ``polars`` package.
             kwargs: the data to be selected, as named arguments.
 
         Keyword Args:
@@ -700,6 +708,8 @@ class Network:  # pylint: disable=too-many-public-methods
         Returns:
             a network elements dataframe for the specified element type
         """
+        if backend not in ('pandas', 'polars'):
+            raise ValueError(f"Unsupported dataframe backend '{backend}', expected 'pandas' or 'polars'")
         filter_attributes = _pp.FilterAttributesType.DEFAULT_ATTRIBUTES
         if all_attributes:
             filter_attributes = _pp.FilterAttributesType.ALL_ATTRIBUTES
@@ -720,6 +730,13 @@ class Network:  # pylint: disable=too-many-public-methods
         series_array = _pp.create_network_elements_series_array(self._handle, element_type, filter_attributes,
                                                                 attributes, elements_array, self._per_unit,
                                                                 self._nominal_apparent_power)
+        if backend == 'polars':
+            result_pl = create_polars_frame_from_series_array(series_array)
+            if attributes:
+                # keep the key (index) columns, which have no counterpart to pandas' preserved index
+                index_names = [s.name for s in series_array if s.index]
+                result_pl = result_pl.select([c for c in result_pl.columns if c in index_names or c in attributes])
+            return result_pl
         result = create_data_frame_from_series_array(series_array)
         if attributes:
             result = result[attributes]
@@ -926,7 +943,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return self.get_elements(ElementType.BUS_FROM_BUS_BREAKER_VIEW, all_attributes, attributes, **kwargs)
 
     def get_generators(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                       **kwargs: ArrayLike) -> DataFrame:
+                       backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of generators.
 
@@ -934,6 +951,8 @@ class Network:  # pylint: disable=too-many-public-methods
             all_attributes: flag for including all attributes in the dataframe, default is false
             attributes: attributes to include in the dataframe. The 2 parameters are mutually exclusive.
                         If no parameter is specified, the dataframe will include the default attributes.
+            backend: the dataframe library used for the result, either ``'pandas'`` (default) or ``'polars'``.
+                     Requires the optional ``polars`` package when set to ``'polars'``.
             kwargs: the data to be selected, as named arguments.
 
         Returns:
@@ -1041,7 +1060,7 @@ class Network:  # pylint: disable=too-many-public-methods
             `p` can be lower than `min_p`. Actually, the relation: :math:`\\text{min_p} <= -p <= \\text{max_p}`
             should hold.
         """
-        return self.get_elements(ElementType.GENERATOR, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.GENERATOR, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_loads(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
                   **kwargs: ArrayLike) -> DataFrame:
@@ -3337,7 +3356,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self.get_elements(ElementType.DC_BUS, all_attributes, attributes, **kwargs)
 
-    def _update_elements(self, element_type: ElementType, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def _update_elements(self, element_type: ElementType, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update network elements with data provided as a :class:`~pandas.DataFrame` or as named arguments.for a specified element type.
 
@@ -3352,8 +3371,13 @@ class Network:  # pylint: disable=too-many-public-methods
                     In the case of sequences, all arguments must have the same length.
         """
         metadata = _pp.get_network_elements_dataframe_metadata(element_type)
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        if _is_polars_dataframe(df):
+            if kwargs:
+                raise RuntimeError('You must provide data in only one form: dataframe or named arguments')
+            c_df = _create_c_dataframe_from_polars(df, metadata)
+        else:
+            df = _adapt_df_or_kwargs(metadata, df, **kwargs)
+            c_df = _create_c_dataframe(df, metadata)
         _pp.update_network_elements_with_series(self._handle, c_df, element_type, self._per_unit,
                                                 self._nominal_apparent_power)
 
@@ -3416,12 +3440,13 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.SWITCH, df, **kwargs)
 
-    def update_generators(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_generators(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update generators with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
         Args:
-            df: the data to be updated, as a dataframe.
+            df: the data to be updated, as a pandas or polars dataframe. A polars dataframe must
+                contain the key column(s) (e.g. ``id``) as regular columns, since polars has no index.
             kwargs: the data to be updated, as named arguments.
                     Arguments can be single values or any type of sequence.
                     In the case of sequences, all arguments must have the same length.
