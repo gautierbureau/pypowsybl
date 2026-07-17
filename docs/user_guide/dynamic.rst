@@ -56,6 +56,36 @@ Pypowsybl will find the path to this file in the powsybl config.yml in dynawo-si
 
 The parameterSetId argument must match an id in this file (generally called models.par).
 
+Additional models
+-----------------
+
+Dynawo can register additional dynamic model definitions at runtime through its ``additionalModelsFile``
+(a JSON file following the ``models.json`` schema). In pypowsybl you can describe these models directly
+in Python with the :class:`~pypowsybl.dynamic.ModelConfig` class instead of authoring a JSON file: they
+are serialized to a temporary ``models.json`` and wired to the ``additionalModelsFile`` provider parameter
+automatically.
+
+A model must extend an **existing** category (see ``ModelMapping.get_categories_names``) and cannot
+overwrite a built-in model. Once registered, its name can be used through the ``model_name`` argument of
+the ``add_*`` methods, exactly like a built-in model.
+
+.. code-block:: python
+
+    import pypowsybl.dynamic as dyn
+
+    # describe an additional load model (mirrors one models.json entry)
+    my_load = dyn.ModelConfig(category='BASE_LOAD',
+                              lib='MyCustomLoad',
+                              doc='My custom load model',
+                              properties=['CONTROLLABLE'])
+
+    parameters = dyn.Parameters(start_time=0, stop_time=50,
+                                additional_models=[my_load])
+
+    # the new model name is now usable like a built-in one
+    model_mapping = dyn.ModelMapping()
+    model_mapping.add_base_load(static_id='LOAD', parameter_set_id='LAB', model_name='MyCustomLoad')
+
 Simple example
 --------------
 To run a Dynawo simulation:

@@ -21,3 +21,4 @@ from .impl.extensions import (
     add_dynamic_simulation_extensions,
     get_dynamic_simulation_systems,
 )
+from .impl.model_config import ModelConfig
