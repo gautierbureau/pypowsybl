@@ -4,6 +4,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
+from contextlib import nullcontext
 from typing import List
 from typing import Optional
 from pandas import DataFrame
@@ -31,16 +32,21 @@ class Simulation:  # pylint: disable=too-few-public-methods
             report_node: Optional[ReportNode] = None
             ) -> SimulationResult:
         """Run the dynawo simulation"""
-        return SimulationResult(
-                _pp.run_dynamic_simulation(
-                    self._handle,
-                    network._handle, # pylint: disable=protected-access
-                    model_mapping._handle, # pylint: disable=protected-access
-                    None if event_mapping is None else event_mapping._handle, # pylint: disable=protected-access
-                    None if timeseries_mapping is None else timeseries_mapping._handle, # pylint: disable=protected-access
-                    parameters._to_c_parameters() if parameters is not None else _pp.DynamicSimulationParameters(), # pylint: disable=protected-access
-                    None if report_node is None else report_node._report_node) # pylint: disable=protected-access
-        )
+        # When additional models are provided, they are serialized to a temporary
+        # models.json whose lifetime must span the whole simulation run.
+        additional_models_ctx = parameters._additional_models_file() if parameters is not None else nullcontext(None) # pylint: disable=protected-access
+        with additional_models_ctx as additional_models_file:
+            c_parameters = parameters._to_c_parameters(additional_models_file) if parameters is not None else _pp.DynamicSimulationParameters() # pylint: disable=protected-access
+            return SimulationResult(
+                    _pp.run_dynamic_simulation(
+                        self._handle,
+                        network._handle, # pylint: disable=protected-access
+                        model_mapping._handle, # pylint: disable=protected-access
+                        None if event_mapping is None else event_mapping._handle, # pylint: disable=protected-access
+                        None if timeseries_mapping is None else timeseries_mapping._handle, # pylint: disable=protected-access
+                        c_parameters,
+                        None if report_node is None else report_node._report_node) # pylint: disable=protected-access
+            )
 
 
     @staticmethod

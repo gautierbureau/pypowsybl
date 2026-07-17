@@ -10,3 +10,4 @@ from .impl.simulation_result import SimulationResult
 from .impl.simulation import Simulation
 from .impl.parameters import Parameters
 from .impl.model_mapping import ModelMapping
+from .impl.model_config import ModelConfig
