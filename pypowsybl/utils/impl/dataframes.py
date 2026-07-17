@@ -221,13 +221,21 @@ def _adapt_properties_kwargs(**kwargs: _ArrayLike) -> DataFrame:
     return DataFrame(index=index, data=data)
 
 
-def _get_c_dataframes(dfs: List[_Optional[DataFrame]], metadata: List[List[_pp.SeriesMetadata]],
+def _get_c_dataframes(dfs: List[_Optional[_Any]], metadata: List[List[_pp.SeriesMetadata]],
                       **kwargs: _ArrayLike) -> List[_Optional[_pp.Dataframe]]:
     c_dfs: List[_Optional[_pp.Dataframe]] = []
-    dfs[0] = _adapt_df_or_kwargs(metadata[0], dfs[0], **kwargs)
+    # the first dataframe may also be built from keyword arguments; polars frames are passed through
+    # untouched (they have no index to adapt) and dispatched per-frame below
+    if _is_polars_dataframe(dfs[0]):
+        if kwargs:
+            raise RuntimeError('You must provide data in only one form: dataframe or named arguments')
+    else:
+        dfs[0] = _adapt_df_or_kwargs(metadata[0], dfs[0], **kwargs)
     for i, df in enumerate(dfs):
         if df is None:
             c_dfs.append(None)
+        elif _is_polars_dataframe(df):
+            c_dfs.append(_create_c_dataframe_from_polars(df, metadata[i]))
         else:
             c_dfs.append(_create_c_dataframe(df, metadata[i]))
     return c_dfs

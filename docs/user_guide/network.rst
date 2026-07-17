@@ -199,10 +199,12 @@ to the reference API :doc:`documentation </reference/network>`.
 Polars backend (experimental)
 .............................
 
-Getters such as :meth:`~pypowsybl.network.Network.get_generators` accept an optional
-``backend`` argument. By default (``backend='pandas'``) a :class:`pandas.DataFrame` is
-returned. With ``backend='polars'`` a :class:`polars.DataFrame` is returned instead.
-This requires the optional ``polars`` dependency (``pip install pypowsybl[polars]``).
+All element getters (:meth:`~pypowsybl.network.Network.get_generators`,
+:meth:`~pypowsybl.network.Network.get_loads`, :meth:`~pypowsybl.network.Network.get_lines`,
+tap changer steps, ...) accept an optional ``backend`` argument. By default
+(``backend='pandas'``) a :class:`pandas.DataFrame` is returned. With ``backend='polars'``
+a :class:`polars.DataFrame` is returned instead. This requires the optional ``polars``
+dependency (``pip install pypowsybl[polars]``).
 
 Because polars has no row-index concept, the columns that pandas exposes as an index
 (the element IDs, and any composite key) are returned as regular leading columns:
@@ -213,9 +215,11 @@ Because polars has no row-index concept, the columns that pandas exposes as an i
     >>> df.columns[0]                                   # doctest: +SKIP
     'id'
 
-Update methods such as :meth:`~pypowsybl.network.Network.update_generators` likewise accept
-a :class:`polars.DataFrame`; in that case the key column(s) (e.g. ``id``) must be present as
-regular columns, since there is no index to read them from.
+Update and create methods (such as :meth:`~pypowsybl.network.Network.update_generators` and
+:meth:`~pypowsybl.network.Network.create_loads`) likewise accept a :class:`polars.DataFrame`,
+including the multi-table creations (e.g. tap changers with their steps). In that case the key
+column(s) (e.g. ``id``, or ``id`` together with ``position``) must be present as regular
+columns, since there is no index to read them from.
 
 Updating network elements
 -------------------------

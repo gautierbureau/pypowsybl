@@ -66,6 +66,38 @@ def test_polars_round_trip():
         assert row_after['target_p'] == pytest.approx(row_before['target_p'] + 10.0)
 
 
+@pytest.mark.parametrize('getter', ['get_loads', 'get_lines', 'get_buses',
+                                    'get_voltage_levels', 'get_substations', 'get_2_windings_transformers'])
+def test_getters_support_polars_backend(getter):
+    n = pp.network.create_eurostag_tutorial_example1_network()
+    df = getattr(n, getter)(backend='polars')
+    assert isinstance(df, pl.DataFrame)
+    # element id(s) exposed as leading column(s), not an index
+    assert 'id' in df.columns
+
+
+def test_multi_index_table_polars():
+    n = pp.network.create_eurostag_tutorial_example1_network()
+    steps = n.get_ratio_tap_changer_steps(backend='polars')
+    assert isinstance(steps, pl.DataFrame)
+    # the (id, position) composite key becomes the two leading columns
+    assert steps.columns[:2] == ['id', 'position']
+
+
+def test_create_from_polars():
+    n = pp.network.create_eurostag_tutorial_example1_network()
+    n.create_loads(pl.DataFrame({
+        'id': ['NEW_LOAD'],
+        'voltage_level_id': ['VLLOAD'],
+        'bus_id': ['NLOAD'],
+        'p0': [10.0],
+        'q0': [5.0],
+    }))
+    loads = n.get_loads()
+    assert 'NEW_LOAD' in loads.index
+    assert loads.loc['NEW_LOAD', 'p0'] == pytest.approx(10.0)
+
+
 def test_invalid_backend_raises():
     n = pp.network.create_eurostag_tutorial_example1_network()
     with pytest.raises(ValueError, match="Unsupported dataframe backend"):

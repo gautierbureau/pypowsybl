@@ -743,7 +743,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return result
 
     def get_sub_networks(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                         **kwargs: ArrayLike) -> DataFrame:
+                         backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of sub networks
 
@@ -755,7 +755,7 @@ class Network:  # pylint: disable=too-many-public-methods
         Returns:
             A dataframe of sub networks.
         """
-        return self.get_elements(ElementType.SUB_NETWORK, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.SUB_NETWORK, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_sub_network(self, sub_network_id: str) -> Network:
         """
@@ -782,7 +782,7 @@ class Network:  # pylint: disable=too-many-public-methods
         self._handle = _pp.flatten(self._handle)
 
     def get_buses(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of buses from the bus view.
 
@@ -865,10 +865,10 @@ class Network:  # pylint: disable=too-many-public-methods
             S4VL1_0 400.0000 -1.1259            S4VL1
             ======= ======== ======= ================
         """
-        return self.get_elements(ElementType.BUS, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BUS, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_bus_breaker_view_buses(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                   **kwargs: ArrayLike) -> DataFrame:
+                                   backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of buses from the bus/breaker view.
 
@@ -940,7 +940,7 @@ class Network:  # pylint: disable=too-many-public-methods
             S4VL1_4        400.0000  -1.1259                    0                      0            S4VL1  S4VL1_0
             ======== ==== ========= ======== ==================== ====================== ================ ========
         """
-        return self.get_elements(ElementType.BUS_FROM_BUS_BREAKER_VIEW, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BUS_FROM_BUS_BREAKER_VIEW, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_generators(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
                        backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
@@ -1063,7 +1063,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return self.get_elements(ElementType.GENERATOR, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_loads(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of loads.
 
@@ -1168,10 +1168,10 @@ class Network:  # pylint: disable=too-many-public-methods
             B14-L  UNDEFINED NaN NaN             VL14  VL14_0      True
             ===== ========== === === ================ ======= =========
         """
-        return self.get_elements(ElementType.LOAD, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.LOAD, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_grounds(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of grounds.
 
@@ -1196,10 +1196,10 @@ class Network:  # pylint: disable=too-many-public-methods
             This dataframe is indexed on the ground ID.
 
         """
-        return self.get_elements(ElementType.GROUND, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.GROUND, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_batteries(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                      **kwargs: ArrayLike) -> DataFrame:
+                      backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of batteries.
 
@@ -1238,9 +1238,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the battery ID.
         """
-        return self.get_elements(ElementType.BATTERY, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BATTERY, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of lines data.
 
@@ -1331,10 +1331,10 @@ class Network:  # pylint: disable=too-many-public-methods
             L1-5-1   NaN NaN NaN NaN NaN NaN               VL1               VL5   VL1_0   VL5_0       True       True
             ======== === === === === === === ================= ================= ======= ======= ========== ==========
         """
-        return self.get_elements(ElementType.LINE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.LINE, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_2_windings_transformers(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                    **kwargs: ArrayLike) -> DataFrame:
+                                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of 2 windings transformers.
 
@@ -1435,10 +1435,10 @@ class Network:  # pylint: disable=too-many-public-methods
             T5-6-1 NaN NaN NaN NaN NaN NaN               VL5               VL6   VL5_0   VL6_0       True       True
             ====== === === === === === === ================= ================= ======= ======= ========== ==========
         """
-        return self.get_elements(ElementType.TWO_WINDINGS_TRANSFORMER, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.TWO_WINDINGS_TRANSFORMER, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_3_windings_transformers(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                    **kwargs: ArrayLike) -> DataFrame:
+                                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of 3 windings transformers.
 
@@ -1528,10 +1528,10 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed by the id of the three windings transformers
         """
-        return self.get_elements(ElementType.THREE_WINDINGS_TRANSFORMER, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.THREE_WINDINGS_TRANSFORMER, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_shunt_compensators(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                               **kwargs: ArrayLike) -> DataFrame:
+                               backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of shunt compensators.
 
@@ -1608,10 +1608,10 @@ class Network:  # pylint: disable=too-many-public-methods
             B9-SH     LINEAR NaN NaN NaN              VL9  VL9_0      True
             ===== ========== === === === ================ ====== =========
         """
-        return self.get_elements(ElementType.SHUNT_COMPENSATOR, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.SHUNT_COMPENSATOR, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_non_linear_shunt_compensator_sections(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                                  **kwargs: ArrayLike) -> DataFrame:
+                                                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of shunt compensators sections for non linear model.
 
@@ -1632,10 +1632,10 @@ class Network:  # pylint: disable=too-many-public-methods
         Returns:
             A dataframe of non linear model shunt compensators sections.
         """
-        return self.get_elements(ElementType.NON_LINEAR_SHUNT_COMPENSATOR_SECTION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.NON_LINEAR_SHUNT_COMPENSATOR_SECTION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_linear_shunt_compensator_sections(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                              **kwargs: ArrayLike) -> DataFrame:
+                                              backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of shunt compensators sections for linear model.
 
@@ -1657,10 +1657,10 @@ class Network:  # pylint: disable=too-many-public-methods
         Returns:
            A dataframe of linear models of shunt compensators.
         """
-        return self.get_elements(ElementType.LINEAR_SHUNT_COMPENSATOR_SECTION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.LINEAR_SHUNT_COMPENSATOR_SECTION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_boundary_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                           **kwargs: ArrayLike) -> DataFrame:
+                           backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of boundary lines.
 
@@ -1759,7 +1759,7 @@ class Network:  # pylint: disable=too-many-public-methods
             per-unit calculations. While this is generally not an issue, this produces counterintuitive results
             in the case of boundary lines of different nominal voltages.
         """
-        return self.get_elements(ElementType.BOUNDARY_LINE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BOUNDARY_LINE, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_dangling_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
                            **kwargs: ArrayLike) -> DataFrame:
@@ -1771,7 +1771,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return self.get_boundary_lines(all_attributes, attributes, **kwargs)
 
     def get_boundary_lines_generation(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                      **kwargs: ArrayLike) -> DataFrame:
+                                      backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of boundary lines generation part.
 
@@ -1796,7 +1796,7 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed by the id of the boundary lines.
         """
-        return self.get_elements(ElementType.BOUNDARY_LINE_GENERATION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BOUNDARY_LINE_GENERATION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_dangling_lines_generation(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
                                       **kwargs: ArrayLike) -> DataFrame:
@@ -1809,7 +1809,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return self.get_boundary_lines_generation(all_attributes, attributes, **kwargs)
 
     def get_tie_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                      **kwargs: ArrayLike) -> DataFrame:
+                      backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of tie lines.
 
@@ -1837,10 +1837,10 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed by the id of the tie lines
         """
-        return self.get_elements(ElementType.TIE_LINE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.TIE_LINE, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_lcc_converter_stations(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                   **kwargs: ArrayLike) -> DataFrame:
+                                   backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of LCC converter stations.
 
@@ -1918,10 +1918,10 @@ class Network:  # pylint: disable=too-many-public-methods
                 LCC2 -79.12 NaN NaN            S3VL1 S3VL1_0      True
             ======== ====== === === ================ ======= =========
         """
-        return self.get_elements(ElementType.LCC_CONVERTER_STATION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.LCC_CONVERTER_STATION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_vsc_converter_stations(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                   **kwargs: ArrayLike) -> DataFrame:
+                                   backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of VSC converter stations.
 
@@ -2011,10 +2011,10 @@ class Network:  # pylint: disable=too-many-public-methods
                 VSC2  -9.89 -120.0000 170.031658            S2VL1 S2VL1_0      True
             ======== ====== ========= ========== ================ ======= =========
         """
-        return self.get_elements(ElementType.VSC_CONVERTER_STATION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.VSC_CONVERTER_STATION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_static_var_compensators(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                    **kwargs: ArrayLike) -> DataFrame:
+                                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of static var compensators.
 
@@ -2094,10 +2094,10 @@ class Network:  # pylint: disable=too-many-public-methods
                  SVC NaN -12.5415 NaN            S4VL1 S4VL1_0      True
             ======== === ======== === ================ ======= =========
         """
-        return self.get_elements(ElementType.STATIC_VAR_COMPENSATOR, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.STATIC_VAR_COMPENSATOR, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_voltage_levels(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                           **kwargs: ArrayLike) -> DataFrame:
+                           backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of voltage levels.
 
@@ -2178,10 +2178,10 @@ class Network:  # pylint: disable=too-many-public-methods
                 S4VL1            S4     400.0
             ========= ============= =========
         """
-        return self.get_elements(ElementType.VOLTAGE_LEVEL, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.VOLTAGE_LEVEL, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_busbar_sections(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                            **kwargs: ArrayLike) -> DataFrame:
+                            backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of busbar sections.
 
@@ -2267,10 +2267,10 @@ class Network:  # pylint: disable=too-many-public-methods
              S4VL1_BBS 400.0000  -1.1259            S4VL1      True
             ========== ======== ======== ================ =========
         """
-        return self.get_elements(ElementType.BUSBAR_SECTION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BUSBAR_SECTION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_substations(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                        **kwargs: ArrayLike) -> DataFrame:
+                        backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get substations :class:`~pandas.DataFrame`.
 
@@ -2294,10 +2294,10 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the substation ID.
         """
-        return self.get_elements(ElementType.SUBSTATION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.SUBSTATION, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_hvdc_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                       **kwargs: ArrayLike) -> DataFrame:
+                       backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of HVDC lines.
 
@@ -2373,10 +2373,10 @@ class Network:  # pylint: disable=too-many-public-methods
             HVDC2 SIDE_1_RECTIFIER_SIDE_2_INVERTER                  80.0     400.0                  LCC1                  LCC2       True       True
             ===== ================================ ===================== ========= ===================== ===================== ========== ==========
         """
-        return self.get_elements(ElementType.HVDC_LINE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.HVDC_LINE, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_switches(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                     **kwargs: ArrayLike) -> DataFrame:
+                     backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of switches.
 
@@ -2472,7 +2472,7 @@ class Network:  # pylint: disable=too-many-public-methods
                                      ...          ...    ...              ...
             ============================ ============ ====== ================
         """
-        return self.get_elements(ElementType.SWITCH, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.SWITCH, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_switch_flows(self, switch_ids: Union[str, List[str]]) -> DataFrame:
         r"""
@@ -2540,7 +2540,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return create_data_frame_from_series_array(_pp.get_switch_flows(self._handle, switch_ids))
 
     def get_ratio_tap_changer_steps(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                    **kwargs: ArrayLike) -> DataFrame:
+                                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of ratio tap changer steps.
 
@@ -2614,10 +2614,10 @@ class Network:  # pylint: disable=too-many-public-methods
             \                 2       1.150767 0.0 0.0
             ========== ======== ===== ======== === ===
         """
-        return self.get_elements(ElementType.RATIO_TAP_CHANGER_STEP, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.RATIO_TAP_CHANGER_STEP, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_phase_tap_changer_steps(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                    **kwargs: ArrayLike) -> DataFrame:
+                                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of phase tap changer steps.
 
@@ -2695,10 +2695,10 @@ class Network:  # pylint: disable=too-many-public-methods
             ...      ...   ...  ...       ...       ...
             === ======== ===== ==== ========= =========
         """
-        return self.get_elements(ElementType.PHASE_TAP_CHANGER_STEP, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.PHASE_TAP_CHANGER_STEP, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_ratio_tap_changers(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                               **kwargs: ArrayLike) -> DataFrame:
+                               backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Create a ratio tap changers:class:`~pandas.DataFrame`.
 
@@ -2772,10 +2772,10 @@ class Network:  # pylint: disable=too-many-public-methods
             NHV2_NLOAD        1       0        2          3    158.0          VLLOAD_0
             ========== ==== === ======= ======== ========== ======== =================
         """
-        return self.get_elements(ElementType.RATIO_TAP_CHANGER, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.RATIO_TAP_CHANGER, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_phase_tap_changers(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                               **kwargs: ArrayLike) -> DataFrame:
+                               backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Create a phase tap changers:class:`~pandas.DataFrame`.
 
@@ -2850,10 +2850,10 @@ class Network:  # pylint: disable=too-many-public-methods
             TWT       15       0       32         33           S1VL1_0
             === ==== === ======= ======== ========== =================
         """
-        return self.get_elements(ElementType.PHASE_TAP_CHANGER, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.PHASE_TAP_CHANGER, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_reactive_capability_curve_points(self, all_attributes: bool = False,
-                                             attributes: Optional[List[str]] = None) -> DataFrame:
+                                             attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas') -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of reactive capability curve points.
 
@@ -2879,10 +2879,10 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the generator ID.
         """
-        return self.get_elements(ElementType.REACTIVE_CAPABILITY_CURVE_POINT, all_attributes, attributes)
+        return self.get_elements(ElementType.REACTIVE_CAPABILITY_CURVE_POINT, all_attributes, attributes, backend=backend)
 
     def get_aliases(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                    **kwargs: ArrayLike) -> DataFrame:
+                    backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of aliases of all network elements.
 
@@ -2944,9 +2944,9 @@ class Network:  # pylint: disable=too-many-public-methods
                 >>> len(aliases) > 0
                 True
         """
-        return self.get_elements(ElementType.ALIAS, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.ALIAS, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_identifiables(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_identifiables(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of identifiables
 
@@ -2965,9 +2965,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the identifiable ID.
         """
-        return self.get_elements(ElementType.IDENTIFIABLE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.IDENTIFIABLE, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_injections(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_injections(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of injections
 
@@ -2994,9 +2994,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the injections ID.
         """
-        return self.get_elements(ElementType.INJECTION, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.INJECTION, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_branches(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_branches(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of branches
 
@@ -3033,9 +3033,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the branch ID.
         """
-        return self.get_elements(ElementType.BRANCH, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.BRANCH, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_terminals(self, all_attributes: bool = False, attributes: Optional[List[str]] = None) -> DataFrame:
+    def get_terminals(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas') -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of terminal
 
@@ -3056,10 +3056,10 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the element ID of the terminal.
         """
-        return self.get_elements(ElementType.TERMINAL, all_attributes, attributes)
+        return self.get_elements(ElementType.TERMINAL, all_attributes, attributes, backend=backend)
 
     def get_areas(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of areas.
 
@@ -3108,10 +3108,10 @@ class Network:  # pylint: disable=too-many-public-methods
             Region_AB          Region AB      Region                NaN    0.000000       0.000000            0.0
             ============= ============== =========== ================== =========== ============== ==============
         """
-        return self.get_elements(ElementType.AREA, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.AREA, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_areas_voltage_levels(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of areas voltage levels.
 
@@ -3158,10 +3158,10 @@ class Network:  # pylint: disable=too-many-public-methods
             Region_AB     VLLOAD
             ============= ================
         """
-        return self.get_elements(ElementType.AREA_VOLTAGE_LEVELS, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.AREA_VOLTAGE_LEVELS, all_attributes, attributes, backend=backend, **kwargs)
 
     def get_areas_boundaries(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                  **kwargs: ArrayLike) -> DataFrame:
+                  backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of areas boundaries.
 
@@ -3209,9 +3209,9 @@ class Network:  # pylint: disable=too-many-public-methods
             ControlArea_B      XNODE2_NHV2  True  301.472320  116.434157
             ============= ================ ===== =========== ===========
         """
-        return self.get_elements(ElementType.AREA_BOUNDARIES, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.AREA_BOUNDARIES, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_dc_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_dc_lines(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of DC lines
 
@@ -3237,9 +3237,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the dc line ID.
         """
-        return self.get_elements(ElementType.DC_LINE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.DC_LINE, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_dc_nodes(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_dc_nodes(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of dc nodes.
 
@@ -3262,9 +3262,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the dc node ID.
         """
-        return self.get_elements(ElementType.DC_NODE, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.DC_NODE, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_voltage_source_converters(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_voltage_source_converters(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of voltage source converters.
 
@@ -3305,9 +3305,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the converter ID.
         """
-        return self.get_elements(ElementType.VOLTAGE_SOURCE_CONVERTER, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.VOLTAGE_SOURCE_CONVERTER, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_dc_grounds(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_dc_grounds(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of dc grounds.
 
@@ -3328,9 +3328,9 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the dc ground ID.
         """
-        return self.get_elements(ElementType.DC_GROUND, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.DC_GROUND, all_attributes, attributes, backend=backend, **kwargs)
 
-    def get_dc_buses(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, **kwargs: ArrayLike) -> DataFrame:
+    def get_dc_buses(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         r"""
         Get a dataframe of dc buses.
 
@@ -3354,7 +3354,7 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the dc bus ID.
         """
-        return self.get_elements(ElementType.DC_BUS, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.DC_BUS, all_attributes, attributes, backend=backend, **kwargs)
 
     def _update_elements(self, element_type: ElementType, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
@@ -3381,7 +3381,7 @@ class Network:  # pylint: disable=too-many-public-methods
         _pp.update_network_elements_with_series(self._handle, c_df, element_type, self._per_unit,
                                                 self._nominal_apparent_power)
 
-    def update_buses(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_buses(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update buses with data provided as a dataframe or as named arguments.
 
@@ -3410,7 +3410,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BUS, df, **kwargs)
 
-    def update_switches(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_switches(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update switches with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3481,7 +3481,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.GENERATOR, df, **kwargs)
 
-    def update_loads(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_loads(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update loads with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3512,7 +3512,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.LOAD, df, **kwargs)
 
-    def update_grounds(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_grounds(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update grounds with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3539,7 +3539,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.GROUND, df, **kwargs)
 
-    def update_batteries(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_batteries(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update batteries with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3572,7 +3572,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BATTERY, df, **kwargs)
 
-    def update_boundary_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_boundary_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update boundary lines with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3612,7 +3612,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BOUNDARY_LINE, df, **kwargs)
 
-    def update_dangling_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dangling_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         .. deprecated:: 1.15.0
             Use :meth:`update_boundary_lines` instead.
@@ -3620,7 +3620,7 @@ class Network:  # pylint: disable=too-many-public-methods
         warnings.warn("update_dangling_lines is deprecated, use update_boundary_lines instead.", DeprecationWarning)
         self.update_boundary_lines(df, **kwargs)
 
-    def update_boundary_lines_generation(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_boundary_lines_generation(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update boundary lines generation part with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3653,7 +3653,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BOUNDARY_LINE_GENERATION, df, **kwargs)
 
-    def update_dangling_lines_generation(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dangling_lines_generation(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         .. deprecated:: 1.15.0
             Use :meth:`update_boundary_lines_generation` instead.
@@ -3661,7 +3661,7 @@ class Network:  # pylint: disable=too-many-public-methods
         warnings.warn("update_dangling_lines_generation is deprecated, use update_boundary_lines_generation instead", DeprecationWarning)
         self.update_boundary_lines_generation(df, **kwargs)
 
-    def update_vsc_converter_stations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_vsc_converter_stations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update VSC converter stations with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3697,7 +3697,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.VSC_CONVERTER_STATION, df, **kwargs)
 
-    def update_lcc_converter_stations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_lcc_converter_stations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update VSC converter stations with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3730,7 +3730,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.LCC_CONVERTER_STATION, df, **kwargs)
 
-    def update_static_var_compensators(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_static_var_compensators(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update static var compensators with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3767,7 +3767,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.STATIC_VAR_COMPENSATOR, df, **kwargs)
 
-    def update_hvdc_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_hvdc_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update HVDC lines with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3802,7 +3802,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.HVDC_LINE, df, **kwargs)
 
-    def update_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update lines data with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3844,7 +3844,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.LINE, df, **kwargs)
 
-    def update_2_windings_transformers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_2_windings_transformers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update 2 windings transformers with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3887,7 +3887,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.TWO_WINDINGS_TRANSFORMER, df, **kwargs)
 
-    def update_3_windings_transformers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_3_windings_transformers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update 3 windings transformers with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3951,7 +3951,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.THREE_WINDINGS_TRANSFORMER, df, **kwargs)
 
-    def update_ratio_tap_changers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_ratio_tap_changers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update ratio tap changers with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -3984,7 +3984,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.RATIO_TAP_CHANGER, df, **kwargs)
 
-    def update_ratio_tap_changer_steps(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_ratio_tap_changer_steps(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update ratio tap changer steps with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4015,7 +4015,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.RATIO_TAP_CHANGER_STEP, df, **kwargs)
 
-    def update_phase_tap_changers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_phase_tap_changers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update phase tap changers with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4049,7 +4049,7 @@ class Network:  # pylint: disable=too-many-public-methods
       """
         return self._update_elements(ElementType.PHASE_TAP_CHANGER, df, **kwargs)
 
-    def update_phase_tap_changer_steps(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_phase_tap_changer_steps(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update phase tap changer steps with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4081,7 +4081,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.PHASE_TAP_CHANGER_STEP, df, **kwargs)
 
-    def update_shunt_compensators(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_shunt_compensators(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update shunt compensators with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4113,7 +4113,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.SHUNT_COMPENSATOR, df, **kwargs)
 
-    def update_linear_shunt_compensator_sections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_linear_shunt_compensator_sections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update shunt compensators with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4142,7 +4142,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.LINEAR_SHUNT_COMPENSATOR_SECTION, df, **kwargs)
 
-    def update_non_linear_shunt_compensator_sections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_non_linear_shunt_compensator_sections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update non linear shunt compensators sections with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4170,7 +4170,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.NON_LINEAR_SHUNT_COMPENSATOR_SECTION, df, **kwargs)
 
-    def update_busbar_sections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_busbar_sections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """Update bus bar sections with a ``Pandas`` dataframe.
 
         Args:
@@ -4182,7 +4182,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BUSBAR_SECTION, df, **kwargs)
 
-    def update_voltage_levels(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_voltage_levels(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update voltage levels with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4213,7 +4213,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.VOLTAGE_LEVEL, df, **kwargs)
 
-    def update_substations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_substations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update substations with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4243,7 +4243,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.SUBSTATION, df, **kwargs)
 
-    def update_terminals(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_terminals(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update terminals with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4271,7 +4271,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.TERMINAL, df, **kwargs)
 
-    def update_branches(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_branches(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update branches with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4301,7 +4301,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.BRANCH, df, **kwargs)
 
-    def update_injections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_injections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update injections with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4329,7 +4329,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.INJECTION, df, **kwargs)
 
-    def update_tie_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_tie_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update tie lines with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4358,7 +4358,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.TIE_LINE, df, **kwargs)
 
-    def update_areas(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_areas(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update areas with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4387,7 +4387,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.AREA, df, **kwargs)
 
-    def update_extensions(self, extension_name: str, df: Optional[DataFrame] = None, table_name: str = "",
+    def update_extensions(self, extension_name: str, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, table_name: str = "",
                           **kwargs: ArrayLike) -> None:
         """
         Update extensions of network elements with data provided as a :class:`~pandas.DataFrame`.
@@ -4408,7 +4408,7 @@ class Network:  # pylint: disable=too-many-public-methods
         c_df = _create_c_dataframe(df, metadata)
         _pp.update_extensions(self._handle, extension_name, table_name, c_df)
 
-    def update_dc_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dc_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update dc lines data with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4439,7 +4439,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.DC_LINE, df, **kwargs)
 
-    def update_dc_nodes(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dc_nodes(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update dc nodes with data provided as a dataframe or as named arguments.
 
@@ -4467,7 +4467,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.DC_NODE, df, **kwargs)
 
-    def update_voltage_source_converters(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_voltage_source_converters(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update voltage source converters with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4503,7 +4503,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.VOLTAGE_SOURCE_CONVERTER, df, **kwargs)
 
-    def update_dc_grounds(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dc_grounds(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update dc grounds with data provided as a dataframe or as named arguments.
 
@@ -4531,7 +4531,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.DC_GROUND, df, **kwargs)
 
-    def update_dc_buses(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_dc_buses(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update dc buses with data provided as a dataframe or as named arguments.
 
@@ -4559,7 +4559,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.DC_BUS, df, **kwargs)
 
-    def create_extensions(self, extension_name: str, df: Optional[Union[DataFrame, List[Optional[DataFrame]]]] = None,
+    def create_extensions(self, extension_name: str, df: Optional[Union[DataFrame, 'pl.DataFrame', List[Optional[Union[DataFrame, 'pl.DataFrame']]]]] = None,
                           **kwargs: ArrayLike) -> None:
         """
         create extensions of network elements with data provided as a :class:`~pandas.DataFrame`.
@@ -4630,7 +4630,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return _pp.get_variant_ids(self._handle)
 
-    def get_operational_limits(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, show_inactive_sets: bool = False) -> DataFrame:
+    def get_operational_limits(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, show_inactive_sets: bool = False, backend: Literal['pandas', 'polars'] = 'pandas') -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get the list of operational limits.
 
@@ -4662,10 +4662,10 @@ class Network:  # pylint: disable=too-many-public-methods
             All limits on the network
         """
         if show_inactive_sets:
-            return self.get_elements(ElementType.OPERATIONAL_LIMITS, all_attributes, attributes)
-        return self.get_elements(ElementType.SELECTED_OPERATIONAL_LIMITS, all_attributes, attributes)
+            return self.get_elements(ElementType.OPERATIONAL_LIMITS, all_attributes, attributes, backend=backend)
+        return self.get_elements(ElementType.SELECTED_OPERATIONAL_LIMITS, all_attributes, attributes, backend=backend)
 
-    def update_operational_limits(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def update_operational_limits(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Update operational limits values with data provided as a :class:`~pandas.DataFrame` or as named arguments.
 
@@ -4697,7 +4697,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._update_elements(ElementType.OPERATIONAL_LIMITS, df, **kwargs)
 
-    def get_voltage_angle_limits(self, all_attributes: bool = False, attributes: Optional[List[str]] = None) -> DataFrame:
+    def get_voltage_angle_limits(self, all_attributes: bool = False, attributes: Optional[List[str]] = None, backend: Literal['pandas', 'polars'] = 'pandas') -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get the list of voltage angle limits.
 
@@ -4752,7 +4752,7 @@ class Network:  # pylint: disable=too-many-public-methods
         Returns:
             All voltage angle limits on the network.
         """
-        return self.get_elements(ElementType.VOLTAGE_ANGLE_LIMITS, all_attributes, attributes)
+        return self.get_elements(ElementType.VOLTAGE_ANGLE_LIMITS, all_attributes, attributes, backend=backend)
 
     def get_node_breaker_topology(self, voltage_level_id: str) -> NodeBreakerTopology:
         """
@@ -4798,18 +4798,18 @@ class Network:  # pylint: disable=too-many-public-methods
             networks = [networks]
         self._handle = _pp.merge([self._handle] + [n._handle for n in networks])
 
-    def _create_elements(self, element_type: ElementType, dfs: List[Optional[DataFrame]],
+    def _create_elements(self, element_type: ElementType, dfs: List[Optional[Union[DataFrame, 'pl.DataFrame']]],
                          **kwargs: ArrayLike) -> None:
         metadata = _pp.get_network_elements_creation_dataframes_metadata(element_type)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_element(self._handle, c_dfs, element_type)
 
-    def _create_extensions(self, extension_name: str, dfs: List[Optional[DataFrame]], **kwargs: ArrayLike) -> None:
+    def _create_extensions(self, extension_name: str, dfs: List[Optional[Union[DataFrame, 'pl.DataFrame']]], **kwargs: ArrayLike) -> None:
         metadata = _pp.get_network_extensions_creation_dataframes_metadata(extension_name)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
         _pp.create_extensions(self._handle, c_dfs, extension_name)
 
-    def create_substations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_substations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates substations.
 
@@ -4847,7 +4847,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         self._create_elements(ElementType.SUBSTATION, [df], **kwargs)
 
-    def create_generators(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_generators(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates generators.
 
@@ -4898,7 +4898,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         self._create_elements(ElementType.GENERATOR, [df], **kwargs)
 
-    def create_busbar_sections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_busbar_sections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates bus bar sections.
 
@@ -4929,7 +4929,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         self._create_elements(ElementType.BUSBAR_SECTION, [df], **kwargs)
 
-    def create_buses(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_buses(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates buses in bus-breaker voltage levels.
 
@@ -4961,7 +4961,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.BUS, [df], **kwargs)
 
-    def create_loads(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_loads(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Create loads.
 
@@ -4999,7 +4999,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.LOAD, [df], **kwargs)
 
-    def create_grounds(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_grounds(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Create grounds.
 
@@ -5034,7 +5034,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.GROUND, [df], **kwargs)
 
-    def create_batteries(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_batteries(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates batteries.
 
@@ -5074,7 +5074,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.BATTERY, [df], **kwargs)
 
-    def create_boundary_lines(self, df: Optional[DataFrame] = None, generation_df: DataFrame = pd.DataFrame(), **kwargs: ArrayLike) -> None:
+    def create_boundary_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, generation_df: DataFrame = pd.DataFrame(), **kwargs: ArrayLike) -> None:
         """
         Creates boundary lines.
 
@@ -5140,7 +5140,7 @@ class Network:  # pylint: disable=too-many-public-methods
             kwargs.pop(ucte_xnode_code_str)
         return self._create_elements(ElementType.BOUNDARY_LINE, [df, generation_df], **kwargs)
 
-    def create_dangling_lines(self, df: Optional[DataFrame] = None, generation_df: DataFrame = pd.DataFrame(), **kwargs: ArrayLike) -> None:
+    def create_dangling_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, generation_df: DataFrame = pd.DataFrame(), **kwargs: ArrayLike) -> None:
         """
         .. deprecated:: 1.15.0
             Use :meth:`create_boundary_lines` instead.
@@ -5148,7 +5148,7 @@ class Network:  # pylint: disable=too-many-public-methods
         warnings.warn("create_dangling_lines is deprecated, use create_boundary_lines", DeprecationWarning)
         self.create_boundary_lines(df, generation_df, **kwargs)
 
-    def create_lcc_converter_stations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_lcc_converter_stations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates LCC converter stations.
 
@@ -5186,7 +5186,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.LCC_CONVERTER_STATION, [df], **kwargs)
 
-    def create_vsc_converter_stations(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_vsc_converter_stations(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates VSC converter stations.
 
@@ -5226,7 +5226,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.VSC_CONVERTER_STATION, [df], **kwargs)
 
-    def create_static_var_compensators(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_static_var_compensators(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates static var compensators.
 
@@ -5269,7 +5269,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.STATIC_VAR_COMPENSATOR, [df], **kwargs)
 
-    def create_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates lines.
 
@@ -5321,7 +5321,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.LINE, [df], **kwargs)
 
-    def create_2_windings_transformers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_2_windings_transformers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates 2 windings transformers.
 
@@ -5373,7 +5373,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.TWO_WINDINGS_TRANSFORMER, [df], **kwargs)
 
-    def create_3_windings_transformers(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_3_windings_transformers(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates three-winding transformers.
 
@@ -5454,8 +5454,8 @@ class Network:  # pylint: disable=too-many-public-methods
         return self._create_elements(ElementType.THREE_WINDINGS_TRANSFORMER, [df], **kwargs)
 
     def create_shunt_compensators(self, shunt_df: DataFrame,
-                                  linear_model_df: Optional[DataFrame] = None,
-                                  non_linear_model_df: Optional[DataFrame] = None) -> None:
+                                  linear_model_df: Optional[Union[DataFrame, 'pl.DataFrame']] = None,
+                                  non_linear_model_df: Optional[Union[DataFrame, 'pl.DataFrame']] = None) -> None:
         """
         Create shunt compensators.
 
@@ -5553,7 +5553,7 @@ class Network:  # pylint: disable=too-many-public-methods
         dfs: List[Optional[DataFrame]] = [shunt_df, linear_model_df, non_linear_model_df]
         return self._create_elements(ElementType.SHUNT_COMPENSATOR, dfs)
 
-    def create_switches(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_switches(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates switches.
 
@@ -5600,7 +5600,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.SWITCH, [df], **kwargs)
 
-    def create_voltage_levels(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_voltage_levels(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates voltage levels.
 
@@ -5747,7 +5747,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.PHASE_TAP_CHANGER, [ptc_df, steps_df])
 
-    def create_hvdc_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_hvdc_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates HVDC lines.
 
@@ -5785,7 +5785,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.HVDC_LINE, [df], **kwargs)
 
-    def create_dc_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_dc_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates DC lines.
 
@@ -5817,7 +5817,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.DC_LINE, [df], **kwargs)
 
-    def create_dc_nodes(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_dc_nodes(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates DC nodes.
 
@@ -5845,7 +5845,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.DC_NODE, [df], **kwargs)
 
-    def create_voltage_source_converters(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_voltage_source_converters(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates voltage source converter.
 
@@ -5899,7 +5899,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.VOLTAGE_SOURCE_CONVERTER, [df], **kwargs)
 
-    def create_dc_grounds(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_dc_grounds(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates DC grounds.
 
@@ -5928,7 +5928,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.DC_GROUND, [df], **kwargs)
 
-    def create_operational_limits(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_operational_limits(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates operational limits.
 
@@ -5976,7 +5976,7 @@ class Network:  # pylint: disable=too-many-public-methods
 
         return self._create_elements(ElementType.OPERATIONAL_LIMITS, [df], **kwargs)
 
-    def create_voltage_angle_limits(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_voltage_angle_limits(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates voltage angle limits.
 
@@ -6036,7 +6036,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.VOLTAGE_ANGLE_LIMITS, [df], **kwargs)
 
-    def create_minmax_reactive_limits(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_minmax_reactive_limits(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates reactive limits of type min/max.
 
@@ -6070,7 +6070,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.MINMAX_REACTIVE_LIMITS, [df], **kwargs)
 
-    def create_curve_reactive_limits(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_curve_reactive_limits(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates reactive limits as "curves".
 
@@ -6116,7 +6116,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.REACTIVE_CAPABILITY_CURVE_POINT, [df], **kwargs)
 
-    def create_tie_lines(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_tie_lines(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates tie lines from two boundary lines.
         Both boundary lines must have the same pairing key (formerly named UCTE Xnode code).
@@ -6165,7 +6165,7 @@ class Network:  # pylint: disable=too-many-public-methods
             kwargs['boundary_line2_id'] = kwargs.pop('dangling_line2_id')
         return self._create_elements(ElementType.TIE_LINE, [df], **kwargs)
 
-    def create_areas(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_areas(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Create areas.
 
@@ -6197,7 +6197,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.AREA, [df], **kwargs)
 
-    def create_areas_voltage_levels(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_areas_voltage_levels(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Associate voltage levels to (existing) areas.
 
@@ -6236,7 +6236,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.AREA_VOLTAGE_LEVELS, [df], **kwargs)
 
-    def create_areas_boundaries(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_areas_boundaries(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Define boundaries of (existing) areas.
 
@@ -6282,7 +6282,7 @@ class Network:  # pylint: disable=too-many-public-methods
         """
         return self._create_elements(ElementType.AREA_BOUNDARIES, [df], **kwargs)
 
-    def create_internal_connections(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
+    def create_internal_connections(self, df: Optional[Union[DataFrame, 'pl.DataFrame']] = None, **kwargs: ArrayLike) -> None:
         """
         Creates internal connections.
 
@@ -6501,7 +6501,7 @@ class Network:  # pylint: disable=too-many-public-methods
         return self.get_extensions(extension_name)
 
     def get_elements_properties(self, all_attributes: bool = False, attributes: Optional[List[str]] = None,
-                                **kwargs: ArrayLike) -> DataFrame:
+                                backend: Literal['pandas', 'polars'] = 'pandas', **kwargs: ArrayLike) -> Union[DataFrame, 'pl.DataFrame']:
         """
         Get a dataframe of properties of all network elements.
 
@@ -6519,7 +6519,7 @@ class Network:  # pylint: disable=too-many-public-methods
 
             This dataframe is indexed on the network element ID.
         """
-        return self.get_elements(ElementType.PROPERTIES, all_attributes, attributes, **kwargs)
+        return self.get_elements(ElementType.PROPERTIES, all_attributes, attributes, backend=backend, **kwargs)
 
     def add_elements_properties(self, df: Optional[DataFrame] = None, **kwargs: ArrayLike) -> None:
         """
