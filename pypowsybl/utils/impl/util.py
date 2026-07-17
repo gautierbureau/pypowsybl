@@ -39,6 +39,58 @@ def create_data_frame_from_series_array(series_array: _pypowsybl.SeriesArray) ->
     return pd.DataFrame(series_dict, index=index)
 
 
+DataframeBackend = str  # 'pandas' | 'polars'
+
+
+def create_frame_from_series_array(series_array: _pypowsybl.SeriesArray,
+                                   backend: DataframeBackend = 'pandas') -> Any:
+    """
+    Builds a dataframe from a native series array, using the requested backend
+    (``'pandas'`` -> :class:`pandas.DataFrame`, ``'polars'`` -> :class:`polars.DataFrame`).
+    """
+    if backend == 'pandas':
+        return create_data_frame_from_series_array(series_array)
+    if backend == 'polars':
+        return create_polars_frame_from_series_array(series_array)
+    raise ValueError(f"Unsupported dataframe backend '{backend}', expected 'pandas' or 'polars'")
+
+
+class DataframeBackendMixin:
+    """
+    Mixin giving a result object a settable dataframe backend honored by all its
+    dataframe accessors. Defaults to pandas, so existing behaviour is unchanged.
+    """
+    _dataframe_backend: DataframeBackend = 'pandas'
+
+    @property
+    def dataframe_backend(self) -> DataframeBackend:
+        """The dataframe library used by this object's dataframe accessors ('pandas' or 'polars')."""
+        return self._dataframe_backend
+
+    @dataframe_backend.setter
+    def dataframe_backend(self, backend: DataframeBackend) -> None:
+        if backend not in ('pandas', 'polars'):
+            raise ValueError(f"Unsupported dataframe backend '{backend}', expected 'pandas' or 'polars'")
+        self._dataframe_backend = backend
+
+    def _create_frame(self, series_array: _pypowsybl.SeriesArray) -> Any:
+        return create_frame_from_series_array(series_array, self._dataframe_backend)
+
+    def _convert_frame(self, df: Any) -> Any:
+        """
+        Convert an already-built pandas frame to the selected backend. For polars the
+        pandas index (element ids / row labels) is moved into regular leading columns.
+
+        Built column-by-column (no ``pl.from_pandas``) so that string columns do not
+        pull in an optional pyarrow dependency.
+        """
+        if df is None or self._dataframe_backend == 'pandas':
+            return df
+        import polars as pl  # pylint: disable=import-outside-toplevel
+        reset = df.reset_index()
+        return pl.DataFrame({str(col): reset[col].to_list() for col in reset.columns})
+
+
 def create_polars_frame_from_series_array(series_array: _pypowsybl.SeriesArray) -> 'pl.DataFrame':
     """
     Builds a polars DataFrame from a native series array.

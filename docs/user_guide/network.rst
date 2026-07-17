@@ -228,6 +228,18 @@ polars conversion measurably faster: on the PEGASE 9241-bus and 13659-bus cases 
 read conversion is about 1.3x–1.8x faster and the write conversion (dataframe to the
 native engine) about 1.8x–2.2x faster than pandas.
 
+The result objects of the other modules (security, sensitivity, short-circuit,
+loadflow validation, dynamic simulation, RAO) expose the same choice through a settable
+``dataframe_backend`` attribute (default ``'pandas'``) honored by all their dataframe
+accessors, for example::
+
+    result = security_analysis.run_ac(network)
+    result.dataframe_backend = 'polars'
+    result.branch_results          # -> polars.DataFrame
+
+:meth:`~pypowsybl.flowdecomposition.FlowDecomposition.run` instead takes a per-call
+``backend`` argument, like the network getters.
+
 Updating network elements
 -------------------------
 

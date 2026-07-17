@@ -6,12 +6,11 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 from __future__ import annotations
-from typing import Union, List, Callable, Optional
-import pandas as pd
+from typing import Union, List, Callable, Optional, Any, Literal
 from pypowsybl import _pypowsybl
 from pypowsybl._pypowsybl import ContingencyContextType, DefaultXnecProvider
 from pypowsybl.network import Network
-from pypowsybl.utils import create_data_frame_from_series_array
+from pypowsybl.utils import create_frame_from_series_array
 import pypowsybl.loadflow
 from .parameters import Parameters
 
@@ -151,7 +150,8 @@ class FlowDecomposition:
         return self
 
     def run(self, network: Network, flow_decomposition_parameters: Optional[Parameters] = None,
-            load_flow_parameters: Optional[pypowsybl.loadflow.Parameters] = None) -> pd.DataFrame:
+            load_flow_parameters: Optional[pypowsybl.loadflow.Parameters] = None,
+            backend: Literal['pandas', 'polars'] = 'pandas') -> Any:
         """
         Runs a flow decomposition.
 
@@ -207,4 +207,4 @@ class FlowDecomposition:
         fd_p = flow_decomposition_parameters._to_c_parameters() if flow_decomposition_parameters is not None else _pypowsybl.FlowDecompositionParameters()  # pylint: disable=protected-access
         lf_p = load_flow_parameters._to_c_parameters() if load_flow_parameters is not None else _pypowsybl.LoadFlowParameters()  # pylint: disable=protected-access
         res = _pypowsybl.run_flow_decomposition(self._handle, network._handle, fd_p, lf_p)
-        return create_data_frame_from_series_array(res)
+        return create_frame_from_series_array(res, backend)

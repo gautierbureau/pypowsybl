@@ -4,14 +4,20 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
+from typing import Any
 import pandas as pd
 from pypowsybl import _pypowsybl as _pp
 from pypowsybl._pypowsybl import DynamicSimulationStatus
-from pypowsybl.utils import create_data_frame_from_series_array
+from pypowsybl.utils import create_data_frame_from_series_array, DataframeBackendMixin
 
 
-class SimulationResult:
-    """Can only be instantiated by :func:`~Simulation.run`"""
+class SimulationResult(DataframeBackendMixin):
+    """Can only be instantiated by :func:`~Simulation.run`
+
+    By default the dataframe accessors return :class:`pandas.DataFrame`. Set
+    :attr:`dataframe_backend` to ``'polars'`` to get :class:`polars.DataFrame` instead
+    (the curves timestamp, which pandas exposes as the index, becomes a regular column).
+    """
 
     def __init__(self, handle: _pp.JavaHandle) -> None:
         self._handle = handle
@@ -22,8 +28,6 @@ class SimulationResult:
         self._curves.reset_index(drop=True, inplace=True)
         self._curves[idx.name] = idx
         self._curves.set_index(keys=idx.name, inplace=True)
-        self._fsv = create_data_frame_from_series_array(_pp.get_final_state_values(self._handle))
-        self._timeline = create_data_frame_from_series_array(_pp.get_timeline(self._handle))
 
     def status(self) -> DynamicSimulationStatus:
         """Status of the simulation (SUCCESS or FAILURE)"""
@@ -33,14 +37,14 @@ class SimulationResult:
         """Status text of the simulation (failure description or empty if success)"""
         return self._status_text
 
-    def curves(self) -> pd.DataFrame:
+    def curves(self) -> Any:
         """Dataframe of the curves results, columns are the curves names and rows are timestep"""
-        return self._curves
+        return self._convert_frame(self._curves)
 
-    def final_state_values(self) -> pd.DataFrame:
+    def final_state_values(self) -> Any:
         """Dataframe of the final state values results, first column is the fsv names, second one the final state values"""
-        return self._fsv
+        return self._create_frame(_pp.get_final_state_values(self._handle))
 
-    def timeline(self) -> pd.DataFrame:
+    def timeline(self) -> Any:
         """Dataframe of the simulation timeline, first column is the event time, second one the model name and the third one the event message"""
-        return self._timeline
+        return self._create_frame(_pp.get_timeline(self._handle))

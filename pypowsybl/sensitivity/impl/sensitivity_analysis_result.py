@@ -4,10 +4,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import numpy as np
 import pandas as pd
 from pypowsybl import _pypowsybl
+from pypowsybl.utils import DataframeBackendMixin
 
 DEFAULT_REFERENCE_COLUMN_ID = 'reference_values'
 
@@ -15,12 +16,16 @@ DEFAULT_MATRIX_ID = 'default'
 TO_REMOVE = 'TO_REMOVE'
 
 
-class SensitivityAnalysisResult:
+class SensitivityAnalysisResult(DataframeBackendMixin):
     """
     Represents the result of a sensitivity analysis.
 
     The result contains computed values (so called "reference" values) and sensitivity values
     of requested factors, on the base case and on post contingency states.
+
+    By default the matrix accessors return :class:`pandas.DataFrame`. Set
+    :attr:`dataframe_backend` to ``'polars'`` to get :class:`polars.DataFrame` instead
+    (the row labels, which pandas exposes as the index, become a leading ``id`` column).
     """
 
     def __init__(self,
@@ -35,6 +40,12 @@ class SensitivityAnalysisResult:
     @staticmethod
     def clean_contingency_id(contingency_id: Optional[str]) -> str:
         return '' if contingency_id is None else contingency_id
+
+    def _matrix_to_backend(self, df: Optional[pd.DataFrame]) -> Any:
+        """convert a matrix dataframe to the selected backend (row labels -> leading 'id' column)"""
+        if df is None or self._dataframe_backend == 'pandas':
+            return df
+        return self._convert_frame(df.rename_axis('id'))
 
     def process_ptdf(self, df: pd.DataFrame, matrix_id: str) -> pd.DataFrame:
         # substract second power transfer zone to first one
@@ -68,7 +79,7 @@ class SensitivityAnalysisResult:
         df = pd.DataFrame(data=data, columns=self.functions_ids[matrix_id],
                           index=self.function_data_frame_index[matrix_id])
 
-        return self.process_ptdf(df, matrix_id) # only used for PTDF
+        return self._matrix_to_backend(self.process_ptdf(df, matrix_id)) # process_ptdf only used for PTDF
 
     def get_reference_matrix(self, matrix_id: str = DEFAULT_MATRIX_ID, contingency_id:  Optional[str] = None, reference_column_id: str = DEFAULT_REFERENCE_COLUMN_ID) -> Optional[pd.DataFrame]:
         """
@@ -86,4 +97,5 @@ class SensitivityAnalysisResult:
 
         data = np.array(matrix, copy=False)
 
-        return pd.DataFrame(data=data, columns=self.functions_ids[matrix_id], index=[reference_column_id])
+        return self._matrix_to_backend(
+            pd.DataFrame(data=data, columns=self.functions_ids[matrix_id], index=[reference_column_id]))
