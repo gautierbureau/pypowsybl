@@ -363,13 +363,10 @@ void LoadFlowParameters::load_to_c_struct(loadflow_parameters& res) const {
 }
 
 std::shared_ptr<loadflow_parameters> LoadFlowParameters::to_c_struct() const {
-    loadflow_parameters* res = new loadflow_parameters();
-    load_to_c_struct(*res);
     //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<loadflow_parameters>(res, [](loadflow_parameters* ptr){
-        deleteLoadFlowParameters(ptr);
-        delete ptr;
-    });
+    auto res = newCOwned<loadflow_parameters>(deleteLoadFlowParameters);
+    load_to_c_struct(*res);
+    return res;
 }
 
 void deleteSensitivityAnalysisParameters(sensitivity_analysis_parameters* ptr) {
@@ -958,11 +955,9 @@ std::vector<std::string> getNetworkElementsIds(const JavaHandle& network, elemen
 }
 
 LoadFlowParameters* createLoadFlowParameters() {
-    loadflow_parameters* parameters_ptr = PowsyblCaller::get()->callJava<loadflow_parameters*>(::createLoadFlowParameters);
-    auto parameters = std::shared_ptr<loadflow_parameters>(parameters_ptr, [](loadflow_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeLoadFlowParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<loadflow_parameters>(::createLoadFlowParameters,
+                                                                              ::freeLoadFlowParameters);
     return new LoadFlowParameters(parameters.get());
 }
 
@@ -1434,10 +1429,9 @@ std::vector<SeriesMetadata> getLimitReductionDataframeMetadata() {
 }
 
 std::vector<SeriesMetadata> getNetworkDataframeMetadata(element_type elementType) {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getSeriesMetadata, elementType);
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getSeriesMetadata, elementType) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 std::vector<std::vector<SeriesMetadata>> getNetworkElementCreationDataframesMetadata(element_type elementType) {
