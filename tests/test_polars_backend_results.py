@@ -111,7 +111,7 @@ def test_loadflow_validation_backend():
     _assert_equivalent(pdf, vr.buses)
 
 
-# --- flowdecomposition (per-call backend) -----------------------------------
+# --- flowdecomposition ------------------------------------------------------
 
 def test_flowdecomposition_backend():
     n = pp.network.create_eurostag_tutorial_example1_with_tie_lines_and_areas()
@@ -119,11 +119,13 @@ def test_flowdecomposition_backend():
         .add_single_element_contingencies(['NHV1_NHV2_1']) \
         .add_monitored_elements(['NHV1_NHV2_1', 'NHV1_NHV2_2'])
     pdf = dec.run(n)
-    pldf = dec.run(n, backend='polars')
-    assert _mod(pdf) == 'pandas' and _mod(pldf) == 'polars'
+    assert _mod(pdf) == 'pandas'
+    dec.dataframe_backend = 'polars'
+    pldf = dec.run(n)
+    assert _mod(pldf) == 'polars'
     _assert_equivalent(pdf, pldf)
     with pytest.raises(ValueError, match="Unsupported dataframe backend"):
-        dec.run(n, backend='numpy')
+        dec.dataframe_backend = 'numpy'
 
 
 # --- rao crac ---------------------------------------------------------------
