@@ -4,17 +4,19 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from typing import Dict
-import pandas as pd
+from typing import Dict, Any
 from prettytable import PrettyTable
 from pypowsybl import _pypowsybl
 from pypowsybl._pypowsybl import PreContingencyResult, PostContingencyResult, OperatorStrategyResult, LimitViolationArray
-from pypowsybl.utils import create_data_frame_from_series_array
+from pypowsybl.utils import DataframeBackendMixin
 
 
-class SecurityAnalysisResult:
+class SecurityAnalysisResult(DataframeBackendMixin):
     """
     The result of a security analysis.
+
+    By default the dataframe properties return :class:`pandas.DataFrame`. Set
+    :attr:`dataframe_backend` to ``'polars'`` to get :class:`polars.DataFrame` instead.
     """
 
     def __init__(self, handle: _pypowsybl.JavaHandle):
@@ -29,7 +31,6 @@ class SecurityAnalysisResult:
                 self._post_contingency_results[result.contingency_id] = result
         for result in operator_strategy_results:
             self._operator_strategy_results[result.operator_strategy_id] = result
-        self._limit_violations = create_data_frame_from_series_array(_pypowsybl.get_limit_violations(self._handle))
 
     @property
     def pre_contingency_result(self) -> PreContingencyResult:
@@ -143,29 +144,29 @@ class SecurityAnalysisResult:
         _pypowsybl.export_to_json(self._handle, path)
 
     @property
-    def limit_violations(self) -> pd.DataFrame:
+    def limit_violations(self) -> Any:
         """
         All limit violations in a dataframe representation.
         """
-        return self._limit_violations
+        return self._create_frame(_pypowsybl.get_limit_violations(self._handle))
 
     @property
-    def branch_results(self) -> pd.DataFrame:
+    def branch_results(self) -> Any:
         """
         Results (P, Q, I) for monitored branches.
         """
-        return create_data_frame_from_series_array(_pypowsybl.get_branch_results(self._handle))
+        return self._create_frame(_pypowsybl.get_branch_results(self._handle))
 
     @property
-    def bus_results(self) -> pd.DataFrame:
+    def bus_results(self) -> Any:
         """
         Bus results (voltage angle and magnitude) for monitored voltage levels.
         """
-        return create_data_frame_from_series_array(_pypowsybl.get_bus_results(self._handle))
+        return self._create_frame(_pypowsybl.get_bus_results(self._handle))
 
     @property
-    def three_windings_transformer_results(self) -> pd.DataFrame:
+    def three_windings_transformer_results(self) -> Any:
         """
         Results (P, Q, I) for monitored three winding transformers.
         """
-        return create_data_frame_from_series_array(_pypowsybl.get_three_windings_transformer_results(self._handle))
+        return self._create_frame(_pypowsybl.get_three_windings_transformer_results(self._handle))

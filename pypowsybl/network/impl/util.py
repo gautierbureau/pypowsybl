@@ -7,7 +7,7 @@
 from typing import List, Optional, Dict
 from pandas import DataFrame
 import pypowsybl._pypowsybl as _pp
-from pypowsybl.utils import create_data_frame_from_series_array
+from pypowsybl.utils import create_data_frame_from_series_array, create_polars_frame_from_series_array
 
 # Type definition
 ParamsDict = Optional[Dict[str, str]]

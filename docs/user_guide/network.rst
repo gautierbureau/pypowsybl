@@ -196,6 +196,50 @@ This allows to easily get steps related to just one transformer:
 For a detailed description of each dataframe, please refer
 to the reference API :doc:`documentation </reference/network>`.
 
+Polars backend (experimental)
+.............................
+
+All element getters (:meth:`~pypowsybl.network.Network.get_generators`,
+:meth:`~pypowsybl.network.Network.get_loads`, :meth:`~pypowsybl.network.Network.get_lines`,
+tap changer steps, ...) accept an optional ``backend`` argument. By default
+(``backend='pandas'``) a :class:`pandas.DataFrame` is returned. With ``backend='polars'``
+a :class:`polars.DataFrame` is returned instead. This requires the optional ``polars``
+dependency (``pip install pypowsybl[polars]``).
+
+Because polars has no row-index concept, the columns that pandas exposes as an index
+(the element IDs, and any composite key) are returned as regular leading columns:
+
+.. code-block:: python
+
+    >>> df = network.get_generators(backend='polars')  # doctest: +SKIP
+    >>> df.columns[0]                                   # doctest: +SKIP
+    'id'
+
+Update and create methods (such as :meth:`~pypowsybl.network.Network.update_generators` and
+:meth:`~pypowsybl.network.Network.create_loads`) likewise accept a :class:`polars.DataFrame`,
+including the multi-table creations (e.g. tap changers with their steps). In that case the key
+column(s) (e.g. ``id``, or ``id`` together with ``position``) must be present as regular
+columns, since there is no index to read them from.
+
+Optional (nullable) values are represented with native polars nulls instead of the
+``NaN`` / masked values used by pandas. Apart from the index-vs-column difference, the
+two backends return identical data. Avoiding the pandas index machinery also makes the
+polars conversion measurably faster: on the PEGASE 9241-bus and 13659-bus cases the
+read conversion is about 1.3x–1.8x faster and the write conversion (dataframe to the
+native engine) about 1.8x–2.2x faster than pandas.
+
+The objects of the other modules (security, sensitivity, short-circuit, loadflow
+validation, dynamic simulation, flow decomposition, RAO) expose the same choice through
+a settable ``dataframe_backend`` attribute (default ``'pandas'``) honored by all their
+dataframe accessors, for example::
+
+    result = security_analysis.run_ac(network)
+    result.dataframe_backend = 'polars'
+    result.branch_results          # -> polars.DataFrame
+
+    decomposition.dataframe_backend = 'polars'
+    decomposition.run(network)     # -> polars.DataFrame
+
 Updating network elements
 -------------------------
 

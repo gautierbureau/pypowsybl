@@ -110,6 +110,49 @@ def _create_c_dataframe(df: DataFrame, series_metadata: List[_pp.SeriesMetadata]
     return _pp.create_dataframe(columns_values, columns_names, columns_types, is_index)
 
 
+def _is_polars_dataframe(obj: _Any) -> bool:
+    """
+    Duck-typed check for a polars DataFrame, so we never import polars unless the
+    user actually passes one (polars is an optional dependency).
+    """
+    cls = type(obj)
+    return cls.__name__ == 'DataFrame' and cls.__module__.split('.')[0] == 'polars'
+
+
+def _create_c_dataframe_from_polars(df: _Any, series_metadata: List[_pp.SeriesMetadata]) -> _pp.Dataframe:
+    """
+    Creates the C representation of a dataframe from a polars DataFrame.
+
+    Polars has no row index, so the key columns are identified from the series
+    metadata (``is_index``) rather than from ``df.index`` as in the pandas path.
+    The key columns are emitted first, matching the ordering the pandas path
+    produces from the frame index.
+    """
+    metadata_by_name = {s.name: s for s in series_metadata}
+    index_names = [s.name for s in series_metadata if s.is_index]
+    for index_name in index_names:
+        if index_name not in df.columns:
+            raise ValueError(f'Missing index column {index_name} in polars dataframe')
+
+    ordered_names = index_names + [name for name in df.columns if name not in index_names]
+    is_index = []
+    columns_names = []
+    columns_values = []
+    columns_types = []
+    for name in ordered_names:
+        if name not in metadata_by_name:
+            raise ValueError(f'No column named {name}')
+        values = df[name].to_numpy()
+        if values.size and isinstance(values[0], np.bool_):
+            # same guard as the pandas path to avoid np.bool_ being read as an index
+            values = values.astype(int)
+        columns_values.append(values)
+        columns_names.append(name)
+        columns_types.append(metadata_by_name[name].type)
+        is_index.append(name in index_names)
+    return _pp.create_dataframe(columns_values, columns_names, columns_types, is_index)
+
+
 def _find_index_in_metadata(series_metadata: List[_pp.SeriesMetadata]) -> _pp.SeriesMetadata:
     return [s for s in series_metadata if s.is_index][0]
 
@@ -178,13 +221,21 @@ def _adapt_properties_kwargs(**kwargs: _ArrayLike) -> DataFrame:
     return DataFrame(index=index, data=data)
 
 
-def _get_c_dataframes(dfs: List[_Optional[DataFrame]], metadata: List[List[_pp.SeriesMetadata]],
+def _get_c_dataframes(dfs: List[_Optional[_Any]], metadata: List[List[_pp.SeriesMetadata]],
                       **kwargs: _ArrayLike) -> List[_Optional[_pp.Dataframe]]:
     c_dfs: List[_Optional[_pp.Dataframe]] = []
-    dfs[0] = _adapt_df_or_kwargs(metadata[0], dfs[0], **kwargs)
+    # the first dataframe may also be built from keyword arguments; polars frames are passed through
+    # untouched (they have no index to adapt) and dispatched per-frame below
+    if _is_polars_dataframe(dfs[0]):
+        if kwargs:
+            raise RuntimeError('You must provide data in only one form: dataframe or named arguments')
+    else:
+        dfs[0] = _adapt_df_or_kwargs(metadata[0], dfs[0], **kwargs)
     for i, df in enumerate(dfs):
         if df is None:
             c_dfs.append(None)
+        elif _is_polars_dataframe(df):
+            c_dfs.append(_create_c_dataframe_from_polars(df, metadata[i]))
         else:
             c_dfs.append(_create_c_dataframe(df, metadata[i]))
     return c_dfs
