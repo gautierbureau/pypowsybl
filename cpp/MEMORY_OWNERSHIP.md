@@ -244,4 +244,10 @@ same idiom and should be migrated when it lands):
 2. ~~Migrate one representative of each group as a proof commit~~ done:
    `createLoadFlowParameters` (group 1), `getNetworkDataframeMetadata`
    (group 2), `LoadFlowParameters::to_c_struct` (group 3).
-3. Sweep the remaining sites group by group (inventory above).
+3. ~~Sweep the remaining sites group by group (inventory above).~~ done for
+   `powsybl-cpp.cpp`. Two sites stay as they are on purpose:
+   `createSensitivityAnalysisParametersFromCStruct` adopts a pointer it did not
+   obtain itself (so it uses `JavaUnique` directly rather than `callJavaOwned`),
+   and `freeGrid2opBackend` releases a `JavaHandle`, not a struct.
+   The four sites listed on `fix_memory_leak_sensi` still need migrating when
+   that branch lands.
