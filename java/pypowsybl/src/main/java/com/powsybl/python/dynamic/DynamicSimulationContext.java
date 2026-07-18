@@ -10,7 +10,12 @@ package com.powsybl.python.dynamic;
 import com.powsybl.commons.report.ReportNode;
 import com.powsybl.computation.local.LocalComputationManager;
 import com.powsybl.dynamicsimulation.*;
+import com.powsybl.dynawo.builders.ModelConfig;
 import com.powsybl.iidm.network.Network;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static com.powsybl.python.commons.PyPowsyblConfiguration.getDefaultDynamicSimulationProvider;
 
@@ -18,6 +23,16 @@ import static com.powsybl.python.commons.PyPowsyblConfiguration.getDefaultDynami
  * @author Nicolas Pierre {@literal <nicolas.pierre@artelys.com>}
  */
 public class DynamicSimulationContext {
+
+    private Map<String, List<ModelConfig>> additionalModels = Collections.emptyMap();
+
+    public Map<String, List<ModelConfig>> getAdditionalModels() {
+        return additionalModels;
+    }
+
+    public void setAdditionalModels(Map<String, List<ModelConfig>> additionalModels) {
+        this.additionalModels = additionalModels;
+    }
 
     public DynamicSimulationResult run(Network network,
                                        DynamicModelsSupplier dynamicModelsSupplier,

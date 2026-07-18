@@ -71,7 +71,8 @@
         <powsybl-dependencies.version>2026.1.0</powsybl-dependencies.version>
         <!-- the mapping lives in a build of powsybl-dynawo newer than the one the dependencies
              declare, on the same powsybl-core; the temp-suffixed build carries the RTE extensions
-             (svarc StaticVarCompensatorProperties among them), matching the pypowsybl-rte shade -->
+             (svarc StaticVarCompensatorProperties among them) and DynawoSimulationParameters.
+             setAdditionalModels (programmatic additional models), matching the pypowsybl-rte shade -->
         <powsybl-dynawo.version>3.4.0-tcb-SNAPSHOT</powsybl-dynawo.version>
         <!-- the temp-suffixed powsybl-core carrying the tap changer blockings iidm extension -->
         <powsybl-core.version>7.4.0-tcb-SNAPSHOT</powsybl-core.version>

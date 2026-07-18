@@ -416,6 +416,10 @@ public final class DynamicSimulationCFunctions {
                     runParameters.setExtendable(null);
                     dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
                 });
+                // additional models declared on the run parameters (in-memory, from Python) are
+                // registered in the catalog before the run, on top of any the mapping already added
+                DynamicSimulationParametersCUtils.applyAdditionalModels(dynamicSimulationParameters,
+                        dynamicContext.getAdditionalModels());
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -457,6 +461,21 @@ public final class DynamicSimulationCFunctions {
             public void run() {
                 addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
                         PythonDynamicModelsSupplier.Mode.KEEP_FIRST);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "addAdditionalModels")
+    public static void addAdditionalModels(IsolateThread thread, ObjectHandle dynamicContextHandle,
+                                           DataframePointer additionalModelsDataframePtr,
+                                           ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                DynamicSimulationContext dynamicContext = ObjectHandles.getGlobal().get(dynamicContextHandle);
+                UpdatingDataframe additionalModelsDataframe = createDataframe(additionalModelsDataframePtr);
+                dynamicContext.setAdditionalModels(
+                        DynamicSimulationParametersCUtils.readAdditionalModels(additionalModelsDataframe));
             }
         });
     }

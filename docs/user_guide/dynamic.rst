@@ -59,10 +59,10 @@ The parameterSetId argument must match an id in this file (generally called mode
 Additional models
 -----------------
 
-Dynawo can register additional dynamic model definitions at runtime through its ``additionalModelsFile``
-(a JSON file following the ``models.json`` schema). In pypowsybl you can describe these models directly
-in Python with the :class:`~pypowsybl.dynamic.ModelConfig` class instead of authoring a JSON file: they
-are serialized to a temporary ``models.json`` and wired to the ``additionalModelsFile`` provider parameter
+Dynawo can register additional dynamic model definitions at runtime (equivalent to its
+``additionalModelsFile``, a JSON file following the ``models.json`` schema). In pypowsybl you describe
+these models directly in Python with the :class:`~pypowsybl.dynamic.ModelConfig` class instead of authoring
+a JSON file: they are passed to the native layer and registered on the Dynawo simulation parameters
 automatically.
 
 A model must extend an **existing** category (see ``ModelMapping.get_categories_names``) and cannot
