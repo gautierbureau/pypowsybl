@@ -636,6 +636,74 @@ void deleteDynamicSimulationParameters(dynamic_simulation_parameters* ptr) {
     pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_values, ptr->provider_parameters.provider_parameters_values_count);
 }
 
+void deleteMarginCalculationParameters(margin_calculation_parameters* ptr) {
+    pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_keys, ptr->provider_parameters.provider_parameters_keys_count);
+    pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_values, ptr->provider_parameters.provider_parameters_values_count);
+    delete[] ptr->debug_dir;
+}
+
+MarginCalculationParameters::MarginCalculationParameters(margin_calculation_parameters* src) {
+    start_time = (double) src->start_time;
+    stop_time = (double) src->stop_time;
+    margin_calculation_start_time = (double) src->margin_calculation_start_time;
+    load_increase_start_time = (double) src->load_increase_start_time;
+    load_increase_stop_time = (double) src->load_increase_stop_time;
+    contingencies_start_time = (double) src->contingencies_start_time;
+    calculation_type = (int) src->calculation_type;
+    accuracy = (int) src->accuracy;
+    load_models_rule = (int) src->load_models_rule;
+    debug_dir = toString(src->debug_dir);
+    providerParametersFromCStruct(src->provider_parameters, provider_parameters_keys, provider_parameters_values);
+}
+
+std::shared_ptr<margin_calculation_parameters> MarginCalculationParameters::to_c_struct() const {
+    margin_calculation_parameters* res = new margin_calculation_parameters();
+    res->start_time = (double) start_time;
+    res->stop_time = (double) stop_time;
+    res->margin_calculation_start_time = (double) margin_calculation_start_time;
+    res->load_increase_start_time = (double) load_increase_start_time;
+    res->load_increase_stop_time = (double) load_increase_stop_time;
+    res->contingencies_start_time = (double) contingencies_start_time;
+    res->calculation_type = (int) calculation_type;
+    res->accuracy = (int) accuracy;
+    res->load_models_rule = (int) load_models_rule;
+    res->debug_dir = copyStringToCharPtr(debug_dir);
+    providerParametersToCStruct(res->provider_parameters, provider_parameters_keys, provider_parameters_values);
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    return std::shared_ptr<margin_calculation_parameters>(res, [](margin_calculation_parameters* ptr){
+        deleteMarginCalculationParameters(ptr);
+        delete ptr;
+    });
+}
+
+void deleteDynamicSecurityAnalysisParameters(dynamic_security_analysis_parameters* ptr) {
+    pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_keys, ptr->provider_parameters.provider_parameters_keys_count);
+    pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_values, ptr->provider_parameters.provider_parameters_values_count);
+    delete[] ptr->debug_dir;
+}
+
+DynamicSecurityAnalysisParameters::DynamicSecurityAnalysisParameters(dynamic_security_analysis_parameters* src) {
+    start_time = (double) src->start_time;
+    stop_time = (double) src->stop_time;
+    contingencies_start_time = (double) src->contingencies_start_time;
+    debug_dir = toString(src->debug_dir);
+    providerParametersFromCStruct(src->provider_parameters, provider_parameters_keys, provider_parameters_values);
+}
+
+std::shared_ptr<dynamic_security_analysis_parameters> DynamicSecurityAnalysisParameters::to_c_struct() const {
+    dynamic_security_analysis_parameters* res = new dynamic_security_analysis_parameters();
+    res->start_time = (double) start_time;
+    res->stop_time = (double) stop_time;
+    res->contingencies_start_time = (double) contingencies_start_time;
+    res->debug_dir = copyStringToCharPtr(debug_dir);
+    providerParametersToCStruct(res->provider_parameters, provider_parameters_keys, provider_parameters_values);
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    return std::shared_ptr<dynamic_security_analysis_parameters>(res, [](dynamic_security_analysis_parameters* ptr){
+        deleteDynamicSecurityAnalysisParameters(ptr);
+        delete ptr;
+    });
+}
+
 DynamicSimulationParameters::DynamicSimulationParameters(dynamic_simulation_parameters* src) {
     start_time = (double) src->start_time;
     stop_time = (double) src->stop_time;
@@ -1818,6 +1886,73 @@ SeriesArray* getFinalStateValues(JavaHandle resultHandle) {
 
 SeriesArray* getTimeline(JavaHandle resultHandle) {
     return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getTimeline, resultHandle));
+}
+
+JavaHandle createDynamicSecurityAnalysis() {
+    return PowsyblCaller::get()->callJava<JavaHandle>(::createDynamicSecurityAnalysis);
+}
+
+void addDynamicMonitoredElements(const JavaHandle& dynamicSecurityAnalysisContext, contingency_context_type contingencyContextType,
+                                 const std::vector<std::string>& branchIds, const std::vector<std::string>& voltageLevelIds,
+                                 const std::vector<std::string>& threeWindingsTransformerIds, const std::vector<std::string>& contingencyIds) {
+    ToCharPtrPtr branchIdsPtr(branchIds);
+    ToCharPtrPtr voltageLevelIdsPtr(voltageLevelIds);
+    ToCharPtrPtr threeWindingsTransformerIdsPtr(threeWindingsTransformerIds);
+    ToCharPtrPtr contingencyIdsPtr(contingencyIds);
+    PowsyblCaller::get()->callJava<>(::addDynamicMonitoredElements, dynamicSecurityAnalysisContext, contingencyContextType, branchIdsPtr.get(), branchIds.size(),
+    voltageLevelIdsPtr.get(), voltageLevelIds.size(), threeWindingsTransformerIdsPtr.get(),
+    threeWindingsTransformerIds.size(), contingencyIdsPtr.get(), contingencyIds.size());
+}
+
+DynamicSecurityAnalysisParameters* createDynamicSecurityAnalysisParameters() {
+    dynamic_security_analysis_parameters* parameters_ptr = PowsyblCaller::get()->callJava<dynamic_security_analysis_parameters*>(::createDynamicSecurityAnalysisParameters);
+    auto parameters = std::shared_ptr<dynamic_security_analysis_parameters>(parameters_ptr, [](dynamic_security_analysis_parameters* ptr){
+        PowsyblCaller::get()->callJava(::freeDynamicSecurityAnalysisParameters, ptr);
+    });
+    return new DynamicSecurityAnalysisParameters(parameters.get());
+}
+
+JavaHandle runDynamicSecurityAnalysis(JavaHandle dynamicSecurityAnalysisContext, JavaHandle network, JavaHandle dynamicMapping,
+                                      JavaHandle* eventMapping, DynamicSecurityAnalysisParameters& parameters, const std::string& provider, JavaHandle* reportNode) {
+    auto c_parameters = parameters.to_c_struct();
+    return PowsyblCaller::get()->callJava<JavaHandle>(::runDynamicSecurityAnalysis, dynamicSecurityAnalysisContext, network, dynamicMapping,
+    (eventMapping == nullptr) ? nullptr : *eventMapping, c_parameters.get(), (char*) provider.data(), (reportNode == nullptr) ? nullptr : *reportNode);
+}
+
+JavaHandle createMarginCalculation() {
+    return PowsyblCaller::get()->callJava<JavaHandle>(::createMarginCalculation);
+}
+
+JavaHandle createLoadsVariationMapping() {
+    return PowsyblCaller::get()->callJava<JavaHandle>(::createLoadsVariationMapping);
+}
+
+void addLoadsVariation(const JavaHandle& loadsVariationSupplier, const std::vector<std::string>& loadIds, double variationValue) {
+    ToCharPtrPtr loadIdsPtr(loadIds);
+    PowsyblCaller::get()->callJava<>(::addLoadsVariation, loadsVariationSupplier, loadIdsPtr.get(), loadIds.size(), variationValue);
+}
+
+MarginCalculationParameters* createMarginCalculationParameters() {
+    margin_calculation_parameters* parameters_ptr = PowsyblCaller::get()->callJava<margin_calculation_parameters*>(::createMarginCalculationParameters);
+    auto parameters = std::shared_ptr<margin_calculation_parameters>(parameters_ptr, [](margin_calculation_parameters* ptr){
+        PowsyblCaller::get()->callJava(::freeMarginCalculationParameters, ptr);
+    });
+    return new MarginCalculationParameters(parameters.get());
+}
+
+JavaHandle runMarginCalculation(JavaHandle marginCalculationContext, JavaHandle network, JavaHandle dynamicMapping,
+                                JavaHandle loadsVariationSupplier, MarginCalculationParameters& parameters, JavaHandle* reportNode) {
+    auto c_parameters = parameters.to_c_struct();
+    return PowsyblCaller::get()->callJava<JavaHandle>(::runMarginCalculation, marginCalculationContext, network, dynamicMapping,
+    loadsVariationSupplier, c_parameters.get(), (reportNode == nullptr) ? nullptr : *reportNode);
+}
+
+SeriesArray* getMarginCalculationLoadIncreaseResults(JavaHandle resultHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMarginCalculationLoadIncreaseResults, resultHandle));
+}
+
+SeriesArray* getMarginCalculationScenarioResults(JavaHandle resultHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMarginCalculationScenarioResults, resultHandle));
 }
 
 std::vector<std::string> getCategories() {

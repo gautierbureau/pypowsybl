@@ -10,3 +10,8 @@ from .impl.simulation_result import SimulationResult
 from .impl.simulation import Simulation
 from .impl.parameters import Parameters
 from .impl.model_mapping import ModelMapping
+from .impl.security_analysis import DynamicSecurityAnalysis
+from .impl.security_analysis_parameters import DynamicSecurityAnalysisParameters
+from .impl.loads_variation import LoadsVariationMapping
+from .impl.margin_calculation_parameters import MarginCalculationParameters, CalculationType, LoadModelsRule
+from .impl.margin_calculation import MarginCalculation, MarginCalculationResult

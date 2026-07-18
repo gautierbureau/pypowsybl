@@ -62,3 +62,6 @@ tests/_trial_temp/*
 
 # Documentation generated files (autosummary)
 docs/reference/api/
+
+# Local native build directory
+/build_native/

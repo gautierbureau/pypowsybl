@@ -231,6 +231,27 @@ void dynamicSimulationBindings(py::module_& m) {
     m.def("get_dynamic_curves", &pypowsybl::getDynamicCurves, py::arg("report_handle"));
     m.def("get_final_state_values", &pypowsybl::getFinalStateValues, py::arg("result_handle"));
     m.def("get_timeline", &pypowsybl::getTimeline, py::arg("result_handle"));
+
+    // dynamic security analysis
+    m.def("create_dynamic_security_analysis", &pypowsybl::createDynamicSecurityAnalysis, "Create a dynamic security analysis");
+    m.def("add_dynamic_monitored_elements", &pypowsybl::addDynamicMonitoredElements,
+          "Add monitors to get specific results on network after dynamic security analysis process",
+          py::arg("dynamic_security_analysis_context"), py::arg("contingency_context_type"), py::arg("branch_ids"),
+          py::arg("voltage_level_ids"), py::arg("three_windings_transformer_ids"), py::arg("contingency_ids"));
+    m.def("run_dynamic_security_analysis", &pypowsybl::runDynamicSecurityAnalysis, "Run a dynamic security analysis",
+          py::call_guard<py::gil_scoped_release>(), py::arg("dynamic_security_analysis_context"), py::arg("network"),
+          py::arg("dynamic_mapping"), py::arg("event_mapping"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"));
+
+    // margin calculation
+    m.def("create_margin_calculation", &pypowsybl::createMarginCalculation, "Create a margin calculation");
+    m.def("create_loads_variation_mapping", &pypowsybl::createLoadsVariationMapping, "Create a loads variation mapping");
+    m.def("add_loads_variation", &pypowsybl::addLoadsVariation, py::arg("loads_variation_supplier"), py::arg("load_ids"),
+          py::arg("variation_value"));
+    m.def("run_margin_calculation", &pypowsybl::runMarginCalculation, "Run a margin calculation",
+          py::call_guard<py::gil_scoped_release>(), py::arg("margin_calculation_context"), py::arg("network"),
+          py::arg("dynamic_mapping"), py::arg("loads_variation_supplier"), py::arg("parameters"), py::arg("report_node"));
+    m.def("get_margin_calculation_load_increase_results", &pypowsybl::getMarginCalculationLoadIncreaseResults, py::arg("result_handle"));
+    m.def("get_margin_calculation_scenario_results", &pypowsybl::getMarginCalculationScenarioResults, py::arg("result_handle"));
 }
 
 void voltageInitializerBinding(py::module_& m) {
@@ -645,6 +666,30 @@ PYBIND11_MODULE(_pypowsybl, m) {
             .def_readwrite("stop_time", &pypowsybl::DynamicSimulationParameters::stop_time)
             .def_readwrite("provider_parameters_keys", &pypowsybl::DynamicSimulationParameters::provider_parameters_keys)
             .def_readwrite("provider_parameters_values", &pypowsybl::DynamicSimulationParameters::provider_parameters_values);
+
+    py::class_<pypowsybl::MarginCalculationParameters>(m, "MarginCalculationParameters")
+            .def(py::init(&pypowsybl::createMarginCalculationParameters))
+            .def_readwrite("start_time", &pypowsybl::MarginCalculationParameters::start_time)
+            .def_readwrite("stop_time", &pypowsybl::MarginCalculationParameters::stop_time)
+            .def_readwrite("margin_calculation_start_time", &pypowsybl::MarginCalculationParameters::margin_calculation_start_time)
+            .def_readwrite("load_increase_start_time", &pypowsybl::MarginCalculationParameters::load_increase_start_time)
+            .def_readwrite("load_increase_stop_time", &pypowsybl::MarginCalculationParameters::load_increase_stop_time)
+            .def_readwrite("contingencies_start_time", &pypowsybl::MarginCalculationParameters::contingencies_start_time)
+            .def_readwrite("calculation_type", &pypowsybl::MarginCalculationParameters::calculation_type)
+            .def_readwrite("accuracy", &pypowsybl::MarginCalculationParameters::accuracy)
+            .def_readwrite("load_models_rule", &pypowsybl::MarginCalculationParameters::load_models_rule)
+            .def_readwrite("debug_dir", &pypowsybl::MarginCalculationParameters::debug_dir)
+            .def_readwrite("provider_parameters_keys", &pypowsybl::MarginCalculationParameters::provider_parameters_keys)
+            .def_readwrite("provider_parameters_values", &pypowsybl::MarginCalculationParameters::provider_parameters_values);
+
+    py::class_<pypowsybl::DynamicSecurityAnalysisParameters>(m, "DynamicSecurityAnalysisParameters")
+            .def(py::init(&pypowsybl::createDynamicSecurityAnalysisParameters))
+            .def_readwrite("start_time", &pypowsybl::DynamicSecurityAnalysisParameters::start_time)
+            .def_readwrite("stop_time", &pypowsybl::DynamicSecurityAnalysisParameters::stop_time)
+            .def_readwrite("contingencies_start_time", &pypowsybl::DynamicSecurityAnalysisParameters::contingencies_start_time)
+            .def_readwrite("debug_dir", &pypowsybl::DynamicSecurityAnalysisParameters::debug_dir)
+            .def_readwrite("provider_parameters_keys", &pypowsybl::DynamicSecurityAnalysisParameters::provider_parameters_keys)
+            .def_readwrite("provider_parameters_values", &pypowsybl::DynamicSecurityAnalysisParameters::provider_parameters_values);
 
     m.def("run_loadflow", &pypowsybl::runLoadFlow, "Run a load flow", py::call_guard<py::gil_scoped_release>(),
           py::arg("network"), py::arg("parameters"), py::arg("provider"), py::arg("report_node"));
