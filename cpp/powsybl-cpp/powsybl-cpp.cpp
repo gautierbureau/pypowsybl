@@ -363,13 +363,10 @@ void LoadFlowParameters::load_to_c_struct(loadflow_parameters& res) const {
 }
 
 std::shared_ptr<loadflow_parameters> LoadFlowParameters::to_c_struct() const {
-    loadflow_parameters* res = new loadflow_parameters();
-    load_to_c_struct(*res);
     //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<loadflow_parameters>(res, [](loadflow_parameters* ptr){
-        deleteLoadFlowParameters(ptr);
-        delete ptr;
-    });
+    auto res = newCOwned<loadflow_parameters>(deleteLoadFlowParameters);
+    load_to_c_struct(*res);
+    return res;
 }
 
 void deleteSensitivityAnalysisParameters(sensitivity_analysis_parameters* ptr) {
@@ -507,9 +504,7 @@ void RaoParameters::load_to_c_struct(rao_parameters& res) const {
 }
 
 std::shared_ptr<rao_parameters> RaoParameters::to_c_struct() const {
-    rao_parameters* res = new rao_parameters();
-    load_to_c_struct(*res);
-    return std::shared_ptr<rao_parameters>(res, [](rao_parameters* ptr){
+    auto res = newCOwned<rao_parameters>([](rao_parameters* ptr){
         if ((bool) ptr->search_tree_parameters) {
           deleteSensitivityAnalysisParameters(ptr->sensitivity_parameters);
           freeStringListListArray(ptr->predefined_combinations);
@@ -518,8 +513,9 @@ std::shared_ptr<rao_parameters> RaoParameters::to_c_struct() const {
         }
         pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_keys, ptr->provider_parameters.provider_parameters_keys_count);
         pypowsybl::deleteCharPtrPtr(ptr->provider_parameters.provider_parameters_values, ptr->provider_parameters.provider_parameters_values_count);
-        delete ptr;
     });
+    load_to_c_struct(*res);
+    return res;
 }
 
 void deleteLoadFlowValidationParameters(loadflow_validation_parameters* ptr) {
@@ -555,14 +551,11 @@ void LoadFlowValidationParameters::load_to_c_struct(loadflow_validation_paramete
 }
 
 std::shared_ptr<loadflow_validation_parameters> LoadFlowValidationParameters::to_c_struct() const {
-    loadflow_validation_parameters* res = new loadflow_validation_parameters();
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    auto res = newCOwned<loadflow_validation_parameters>(deleteLoadFlowValidationParameters);
     loadflow_parameters.load_to_c_struct(res->loadflow_parameters);
     load_to_c_struct(*res);
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<loadflow_validation_parameters>(res, [](loadflow_validation_parameters* ptr){
-        deleteLoadFlowValidationParameters(ptr);
-        delete ptr;
-    });
+    return res;
 }
 
 void deleteSecurityAnalysisParameters(security_analysis_parameters* ptr) {
@@ -583,7 +576,8 @@ SecurityAnalysisParameters::SecurityAnalysisParameters(security_analysis_paramet
 }
 
 std::shared_ptr<security_analysis_parameters> SecurityAnalysisParameters::to_c_struct() const {
-    security_analysis_parameters* res = new security_analysis_parameters();
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    auto res = newCOwned<security_analysis_parameters>(deleteSecurityAnalysisParameters);
     loadflow_parameters.load_to_c_struct(res->loadflow_parameters);
     res->flow_proportional_threshold = (double) flow_proportional_threshold;
     res->low_voltage_proportional_threshold = (double) low_voltage_proportional_threshold;
@@ -592,11 +586,7 @@ std::shared_ptr<security_analysis_parameters> SecurityAnalysisParameters::to_c_s
     res->high_voltage_absolute_threshold = (double) high_voltage_absolute_threshold;
 
     providerParametersToCStruct(res->provider_parameters, provider_parameters_keys, provider_parameters_values);
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<security_analysis_parameters>(res, [](security_analysis_parameters* ptr){
-        deleteSecurityAnalysisParameters(ptr);
-        delete ptr;
-    });
+    return res;
 }
 
 SensitivityAnalysisParameters::SensitivityAnalysisParameters() {
@@ -613,13 +603,10 @@ SensitivityAnalysisParameters::SensitivityAnalysisParameters(sensitivity_analysi
 }
 
 std::shared_ptr<sensitivity_analysis_parameters> SensitivityAnalysisParameters::to_c_struct() const {
-    sensitivity_analysis_parameters* res = new sensitivity_analysis_parameters();
-    load_to_c_struct(*res);
     //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<sensitivity_analysis_parameters>(res, [](sensitivity_analysis_parameters* ptr){
-        deleteSensitivityAnalysisParameters(ptr);
-        delete ptr;
-    });
+    auto res = newCOwned<sensitivity_analysis_parameters>(deleteSensitivityAnalysisParameters);
+    load_to_c_struct(*res);
+    return res;
 }
 
 void SensitivityAnalysisParameters::load_to_c_struct(sensitivity_analysis_parameters& params) const {
@@ -643,15 +630,12 @@ DynamicSimulationParameters::DynamicSimulationParameters(dynamic_simulation_para
 }
 
 std::shared_ptr<dynamic_simulation_parameters> DynamicSimulationParameters::to_c_struct() const {
-    dynamic_simulation_parameters* res = new dynamic_simulation_parameters();
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    auto res = newCOwned<dynamic_simulation_parameters>(deleteDynamicSimulationParameters);
     res->start_time = (double) start_time;
     res->stop_time = (double) stop_time;
     providerParametersToCStruct(res->provider_parameters, provider_parameters_keys, provider_parameters_values);
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<dynamic_simulation_parameters>(res, [](dynamic_simulation_parameters* ptr){
-        deleteDynamicSimulationParameters(ptr);
-        delete ptr;
-    });
+    return res;
 }
 
 FlowDecompositionParameters::FlowDecompositionParameters(flow_decomposition_parameters* src) {
@@ -664,17 +648,15 @@ FlowDecompositionParameters::FlowDecompositionParameters(flow_decomposition_para
 }
 
 std::shared_ptr<flow_decomposition_parameters> FlowDecompositionParameters::to_c_struct() const {
-    flow_decomposition_parameters* res = new flow_decomposition_parameters();
+    //Nothing is allocated inside the struct, so the default deleter is enough
+    auto res = std::make_shared<flow_decomposition_parameters>();
     res->enable_losses_compensation = (unsigned char) enable_losses_compensation;
     res->losses_compensation_epsilon = losses_compensation_epsilon;
     res->sensitivity_epsilon = sensitivity_epsilon;
     res->rescale_mode = (int) rescale_mode;
     res->dc_fallback_enabled_after_ac_divergence = (unsigned char) dc_fallback_enabled_after_ac_divergence;
     res->sensitivity_variable_batch_size = (int) sensitivity_variable_batch_size;
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<flow_decomposition_parameters>(res, [](flow_decomposition_parameters* ptr){
-        delete ptr;
-    });
+    return res;
 }
 
 void setJavaLibraryPath(const std::string& javaLibraryPath) {
@@ -725,17 +707,20 @@ JavaHandle createNetwork(const std::string& name, const std::string& id, bool al
     return PowsyblCaller::get()->callJava<JavaHandle>(::createNetwork, (char*) name.data(), (char*) id.data(), allowVariantMultiThreadAccess);
 }
 
-JavaHandle merge(std::vector<JavaHandle>& networks) {
-    std::vector<void*> networksPtrs;
-    networksPtrs.reserve(networks.size());
-    for (int i = 0; i < networks.size(); ++i) {
-        void* ptr = networks[i];
-        networksPtrs.push_back(ptr);
+std::vector<void*> objectHandleVectorToPtrs(std::vector<JavaHandle>& handles) {
+    std::vector<void*> handlePtrs;
+    handlePtrs.reserve(handles.size());
+    for (auto & i : handles) {
+        void* ptr = i;
+        handlePtrs.push_back(ptr);
     }
-    int networkCount = networksPtrs.size();
-    void** networksData = (void**) networksPtrs.data();
+    return handlePtrs;
+}
 
-    return PowsyblCaller::get()->callJava<JavaHandle>(::merge, networksData, networkCount);
+JavaHandle merge(std::vector<JavaHandle>& networks) {
+    int networkCount = networks.size();
+    std::vector<void*> networksPtrs = objectHandleVectorToPtrs(networks);
+    return PowsyblCaller::get()->callJava<JavaHandle>(::merge, (void**) networksPtrs.data(), networkCount);
 }
 
 JavaHandle getSubNetwork(const JavaHandle& network, const std::string& subNetworkId) {
@@ -815,10 +800,7 @@ SeriesArray* createExporterParametersSeriesArray(const std::string& format) {
 }
 
 std::shared_ptr<network_metadata> getNetworkMetadata(const JavaHandle& network) {
-    network_metadata* attributes = PowsyblCaller::get()->callJava<network_metadata*>(::getNetworkMetadata, network);
-    return std::shared_ptr<network_metadata>(attributes, [](network_metadata* ptr){
-        PowsyblCaller::get()->callJava(::freeNetworkMetadata, ptr);
-    });
+    return PowsyblCaller::get()->callJavaOwned<network_metadata>(::getNetworkMetadata, ::freeNetworkMetadata, network);
 }
 
 void setNetworkCaseDate(const JavaHandle& network, double caseDate) {
@@ -931,6 +913,10 @@ bool updateSwitchPosition(const JavaHandle& network, const std::string& id, bool
     return PowsyblCaller::get()->callJava<bool>(::updateSwitchPosition, network, (char*) id.data(), open);
 }
 
+bool updateDcSwitchPosition(const JavaHandle& network, const std::string& id, bool open) {
+    return PowsyblCaller::get()->callJava<bool>(::updateDcSwitchPosition, network, (char*) id.data(), open);
+}
+
 bool updateConnectableStatus(const JavaHandle& network, const std::string& id, bool connected,
                              bool allowDisconnectors, bool allowFictitious) {
     return PowsyblCaller::get()->callJava<bool>(::updateConnectableStatus, network, (char*) id.data(), connected,
@@ -951,39 +937,29 @@ std::vector<std::string> getNetworkElementsIds(const JavaHandle& network, elemen
 }
 
 LoadFlowParameters* createLoadFlowParameters() {
-    loadflow_parameters* parameters_ptr = PowsyblCaller::get()->callJava<loadflow_parameters*>(::createLoadFlowParameters);
-    auto parameters = std::shared_ptr<loadflow_parameters>(parameters_ptr, [](loadflow_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeLoadFlowParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<loadflow_parameters>(::createLoadFlowParameters,
+                                                                              ::freeLoadFlowParameters);
     return new LoadFlowParameters(parameters.get());
 }
 
 RaoParameters* createRaoParameters() {
-    rao_parameters* parameters_ptr = PowsyblCaller::get()->callJava<rao_parameters*>(::createRaoParameters);
-    auto parameters = std::shared_ptr<rao_parameters>(parameters_ptr, [](rao_parameters* ptr){
-        //Memory has been allocated on java side, we need to clean it up on java side
-        PowsyblCaller::get()->callJava(::freeRaoParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<rao_parameters>(::createRaoParameters, ::freeRaoParameters);
     auto v = new RaoParameters(parameters.get());
     return v;
 }
 
 LoadFlowValidationParameters* createValidationConfig() {
-    loadflow_validation_parameters* parameters_ptr = PowsyblCaller::get()->callJava<loadflow_validation_parameters*>(::createValidationConfig);
-    auto parameters = std::shared_ptr<loadflow_validation_parameters>(parameters_ptr, [](loadflow_validation_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeValidationConfig, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<loadflow_validation_parameters>(::createValidationConfig, ::freeValidationConfig);
     return new LoadFlowValidationParameters(parameters.get());
 }
 
 
 SecurityAnalysisParameters* createSecurityAnalysisParameters() {
-    security_analysis_parameters* parameters_ptr = PowsyblCaller::get()->callJava<security_analysis_parameters*>(::createSecurityAnalysisParameters);
-    auto parameters = std::shared_ptr<security_analysis_parameters>(parameters_ptr, [](security_analysis_parameters* ptr){
-        PowsyblCaller::get()->callJava(::freeSecurityAnalysisParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<security_analysis_parameters>(::createSecurityAnalysisParameters, ::freeSecurityAnalysisParameters);
     return new SecurityAnalysisParameters(parameters.get());
 }
 
@@ -993,18 +969,20 @@ SensitivityAnalysisParameters* createSensitivityAnalysisParameters() {
 }
 
 SensitivityAnalysisParameters* createSensitivityAnalysisParametersFromCStruct(sensitivity_analysis_parameters* parameters_ptr) {
-    auto parameters = std::shared_ptr<sensitivity_analysis_parameters>(parameters_ptr, [](sensitivity_analysis_parameters* ptr){
-        PowsyblCaller::get()->callJava(::freeSensitivityAnalysisParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    JavaUnique<sensitivity_analysis_parameters, ::freeSensitivityAnalysisParameters> parameters { parameters_ptr };
     return new SensitivityAnalysisParameters(parameters.get());
 }
 
 DynamicSimulationParameters* createDynamicSimulationParameters() {
-    dynamic_simulation_parameters* parameters_ptr = PowsyblCaller::get()->callJava<dynamic_simulation_parameters*>(::createDynamicSimulationParameters);
-    auto parameters = std::shared_ptr<dynamic_simulation_parameters>(parameters_ptr, [](dynamic_simulation_parameters* ptr){
-        PowsyblCaller::get()->callJava(::freeDynamicSimulationParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<dynamic_simulation_parameters>(::createDynamicSimulationParameters, ::freeDynamicSimulationParameters);
     return new DynamicSimulationParameters(parameters.get());
+}
+
+bool checkLoadFlowParameters(const LoadFlowParameters& parameters, const std::string& provider, JavaHandle* reportNode) {
+    auto c_parameters = parameters.to_c_struct();
+    return PowsyblCaller::get()->callJava<bool>(::checkLoadFlowParameters, c_parameters.get(), (char *) provider.data(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
 LoadFlowComponentResultArray* runLoadFlow(const JavaHandle& network, const LoadFlowParameters& parameters,
@@ -1260,7 +1238,7 @@ void addFactorMatrix(const JavaHandle& sensitivityAnalysisContext, std::string m
        ToCharPtrPtr variableIdPtr(variablesIds);
        ToCharPtrPtr contingenciesIdPtr(contingenciesIds);
        PowsyblCaller::get()->callJava(::addFactorMatrix, sensitivityAnalysisContext, branchIdPtr.get(), branchesIds.size(),
-                  variableIdPtr.get(), variablesIds.size(), contingenciesIdPtr.get(), contingenciesIds.size(), 
+                  variableIdPtr.get(), variablesIds.size(), contingenciesIdPtr.get(), contingenciesIds.size(),
                   (char*) matrixId.c_str(), ContingencyContextType, sensitivityFunctionType, sensitivityVariableType);
 }
 
@@ -1269,14 +1247,14 @@ JavaHandle runSensitivityAnalysis(const JavaHandle& sensitivityAnalysisContext, 
     return PowsyblCaller::get()->callJava<JavaHandle>(::runSensitivityAnalysis, sensitivityAnalysisContext, network, c_parameters.get(), (char *) provider.data(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
-matrix* getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
-    return PowsyblCaller::get()->callJava<matrix*>(::getSensitivityMatrix, sensitivityAnalysisResultContext,
-                                (char*) matrixId.c_str(), (char*) contingencyId.c_str());
+std::shared_ptr<matrix> getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
+    return PowsyblCaller::get()->callJavaOwned<matrix>(::getSensitivityMatrix, ::freeSensitivityMatrix,
+                                sensitivityAnalysisResultContext, (char*) matrixId.c_str(), (char*) contingencyId.c_str());
 }
 
-matrix* getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
-    return PowsyblCaller::get()->callJava<matrix*>(::getReferenceMatrix, sensitivityAnalysisResultContext,
-                                (char*) matrixId.c_str(), (char*) contingencyId.c_str());
+std::shared_ptr<matrix> getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId) {
+    return PowsyblCaller::get()->callJavaOwned<matrix>(::getReferenceMatrix, ::freeSensitivityMatrix,
+                                sensitivityAnalysisResultContext, (char*) matrixId.c_str(), (char*) contingencyId.c_str());
 }
 
 SeriesArray* createNetworkElementsSeriesArray(const JavaHandle& network, element_type elementType, filter_attributes_type filterAttributesType, const std::vector<std::string>& attributes, dataframe* dataframe, bool perUnit, double nominalApparentPower) {
@@ -1403,27 +1381,25 @@ std::vector<SeriesMetadata> convertDataframeMetadata(dataframe_metadata* datafra
 }
 
 std::vector<SeriesMetadata> getLimitReductionDataframeMetadata() {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getLimitReductionDataframeMetadata);
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getLimitReductionDataframeMetadata) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 std::vector<SeriesMetadata> getNetworkDataframeMetadata(element_type elementType) {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getSeriesMetadata, elementType);
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getSeriesMetadata, elementType) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 std::vector<std::vector<SeriesMetadata>> getNetworkElementCreationDataframesMetadata(element_type elementType) {
 
-    dataframes_metadata* allDataframesMetadata = pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getCreationMetadata, elementType);
+    JavaUnique<dataframes_metadata, ::freeDataframesMetadata> allDataframesMetadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getCreationMetadata, elementType) };
     std::vector<std::vector<SeriesMetadata>> res;
     for (int i =0; i < allDataframesMetadata->dataframes_count; i++) {
         res.push_back(convertDataframeMetadata(allDataframesMetadata->dataframes_metadata + i));
     }
-    pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, allDataframesMetadata);
     return res;
 }
 
@@ -1432,15 +1408,11 @@ void createElement(pypowsybl::JavaHandle network, dataframe_array* dataframes, e
 }
 
 ::validation_level_type getValidationLevel(const JavaHandle& network) {
-    // TBD
-    //return validation_level_type::EQUIPMENT;
     return PowsyblCaller::get()->callJava<validation_level_type>(::getValidationLevel, network);
 }
 
-::validation_level_type validate(const JavaHandle& network) {
-    // TBD
-    //return validation_level_type::STEADY_STATE_HYPOTHESIS;
-    return PowsyblCaller::get()->callJava<validation_level_type>(::validate, network);
+::validation_level_type validate(const JavaHandle& network, JavaHandle* reportNode) {
+    return PowsyblCaller::get()->callJava<validation_level_type>(::validate, network, (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
 void setMinValidationLevel(pypowsybl::JavaHandle network, validation_level_type validationLevel) {
@@ -1477,11 +1449,10 @@ SeriesArray* createLoadFlowProviderParametersSeriesArray(const std::string& prov
 }
 
 LoadFlowParameters* createLoadFlowParametersFromJson(const std::string& parametersJson) {
-    loadflow_parameters* parametersPtr = PowsyblCaller::get()->callJava<loadflow_parameters*>(::createLoadFlowParametersFromJson, (char*) parametersJson.data());
-    LoadFlowParameters* parameters = new LoadFlowParameters(parametersPtr);
     // memory has been allocated on java side, we need to clean it up on java side
-    PowsyblCaller::get()->callJava(::freeLoadFlowParameters, parametersPtr);
-    return parameters;
+    JavaUnique<loadflow_parameters, ::freeLoadFlowParameters> parametersPtr {
+        PowsyblCaller::get()->callJava<loadflow_parameters*>(::createLoadFlowParametersFromJson, (char*) parametersJson.data()) };
+    return new LoadFlowParameters(parametersPtr.get());
 }
 
 std::string writeLoadFlowParametersToJson(const LoadFlowParameters& parameters) {
@@ -1521,19 +1492,18 @@ void removeExtensions(const JavaHandle& network, std::string& name, const std::v
 }
 
 std::vector<SeriesMetadata> getNetworkExtensionsDataframeMetadata(std::string& name, std::string& tableName) {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getExtensionSeriesMetadata, (char*) name.data(), (char*) tableName.data());
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getExtensionSeriesMetadata, (char*) name.data(), (char*) tableName.data()) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 std::vector<std::vector<SeriesMetadata>> getNetworkExtensionsCreationDataframesMetadata(std::string& name) {
-    dataframes_metadata* allDataframesMetadata = pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getExtensionsCreationMetadata, (char*) name.data());
+    JavaUnique<dataframes_metadata, ::freeDataframesMetadata> allDataframesMetadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getExtensionsCreationMetadata, (char*) name.data()) };
     std::vector<std::vector<SeriesMetadata>> res;
     for (int i =0; i < allDataframesMetadata->dataframes_count; i++) {
         res.push_back(convertDataframeMetadata(allDataframesMetadata->dataframes_metadata + i));
     }
-    pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, allDataframesMetadata);
     return res;
 }
 
@@ -1615,11 +1585,8 @@ SeriesArray* runFlowDecomposition(const JavaHandle& flowDecompositionContext, co
 }
 
 FlowDecompositionParameters* createFlowDecompositionParameters() {
-    flow_decomposition_parameters* parameters_ptr = PowsyblCaller::get()->callJava<flow_decomposition_parameters*>(::createFlowDecompositionParameters);
-    auto parameters = std::shared_ptr<flow_decomposition_parameters>(parameters_ptr, [](flow_decomposition_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeFlowDecompositionParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<flow_decomposition_parameters>(::createFlowDecompositionParameters, ::freeFlowDecompositionParameters);
     return new FlowDecompositionParameters(parameters.get());
 }
 
@@ -1723,38 +1690,28 @@ void NadParameters::nad_to_c_struct(nad_parameters& res) const {
 }
 
 std::shared_ptr<sld_parameters> SldParameters::to_c_struct() const {
-    sld_parameters* res = new sld_parameters();
+    //Nothing is allocated inside the struct, so the default deleter is enough
+    auto res = std::make_shared<sld_parameters>();
     sld_to_c_struct(*res);
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<sld_parameters>(res, [](sld_parameters* ptr){
-        delete ptr;
-    });
+    return res;
 }
 
 std::shared_ptr<nad_parameters> NadParameters::to_c_struct() const {
-    nad_parameters* res = new nad_parameters();
+    //Nothing is allocated inside the struct, so the default deleter is enough
+    auto res = std::make_shared<nad_parameters>();
     nad_to_c_struct(*res);
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<nad_parameters>(res, [](nad_parameters* ptr){
-        delete ptr;
-    });
+    return res;
 }
 
 SldParameters* createSldParameters() {
-    sld_parameters* parameters_ptr = PowsyblCaller::get()->callJava<sld_parameters*>(::createSldParameters);
-    auto parameters = std::shared_ptr<sld_parameters>(parameters_ptr, [](sld_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeSldParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<sld_parameters>(::createSldParameters, ::freeSldParameters);
     return new SldParameters(parameters.get());
 }
 
 NadParameters* createNadParameters() {
-    nad_parameters* parameters_ptr = PowsyblCaller::get()->callJava<nad_parameters*>(::createNadParameters);
-    auto parameters = std::shared_ptr<nad_parameters>(parameters_ptr, [](nad_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeNadParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<nad_parameters>(::createNadParameters, ::freeNadParameters);
     return new NadParameters(parameters.get());
 }
 
@@ -1839,20 +1796,19 @@ SeriesArray* getSupportedModelsInformation(std::string categoryName) {
 }
 
 std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string categoryName) {
-    dataframes_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getDynamicMappingsMetaData, (char*) categoryName.c_str());
+    JavaUnique<dataframes_metadata, ::freeDataframesMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getDynamicMappingsMetaData, (char*) categoryName.c_str()) };
     std::vector<std::vector<SeriesMetadata>> res;
         for (int i =0; i < metadata->dataframes_count; i++) {
             res.push_back(convertDataframeMetadata(metadata->dataframes_metadata + i));
         }
-        pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, metadata);
         return res;
 }
 
 std::vector<SeriesMetadata> getEventMappingsMetaData(std::string eventName) {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getEventMappingsMetaData, (char*) eventName.c_str());
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getEventMappingsMetaData, (char*) eventName.c_str()) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 SeriesArray* getEventsInformation() {
@@ -1860,19 +1816,18 @@ SeriesArray* getEventsInformation() {
 }
 
 std::vector<SeriesMetadata> getModificationMetadata(network_modification_type networkModificationType) {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getModificationMetadata, networkModificationType);
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getModificationMetadata, networkModificationType) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 std::vector<std::vector<SeriesMetadata>> getModificationMetadataWithElementType(network_modification_type networkModificationType, element_type elementType) {
-    dataframes_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getModificationMetadataWithElementType, networkModificationType, elementType);
+    JavaUnique<dataframes_metadata, ::freeDataframesMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getModificationMetadataWithElementType, networkModificationType, elementType) };
     std::vector<std::vector<SeriesMetadata>> res;
     for (int i =0; i < metadata->dataframes_count; i++) {
         res.push_back(convertDataframeMetadata(metadata->dataframes_metadata + i));
     }
-    pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, metadata);
     return res;
 }
 
@@ -1940,21 +1895,15 @@ void ScalingParameters::load_to_c_struct(scaling_parameters& res) const {
 }
 
 std::shared_ptr<scaling_parameters> ScalingParameters::to_c_struct() const {
-    scaling_parameters* res = new scaling_parameters();
-    load_to_c_struct(*res);
     //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<scaling_parameters>(res, [](scaling_parameters* ptr){
-        deleteScalingParameters(ptr);
-        delete ptr;
-    });
+    auto res = newCOwned<scaling_parameters>(deleteScalingParameters);
+    load_to_c_struct(*res);
+    return res;
 }
 
  ScalingParameters* createScalingParameters() {
-    scaling_parameters* parameters_ptr = PowsyblCaller::get()->callJava<scaling_parameters*>(::createScalingParameters);
-    auto parameters = std::shared_ptr<scaling_parameters>(parameters_ptr, [](scaling_parameters* ptr){
-       //Memory has been allocated on java side, we need to clean it up on java side
-       PowsyblCaller::get()->callJava(::freeScalingParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<scaling_parameters>(::createScalingParameters, ::freeScalingParameters);
     return new ScalingParameters(parameters.get());
 }
 
@@ -1979,7 +1928,8 @@ ShortCircuitAnalysisParameters::ShortCircuitAnalysisParameters(shortcircuit_anal
 }
 
 std::shared_ptr<shortcircuit_analysis_parameters> ShortCircuitAnalysisParameters::to_c_struct() const {
-    shortcircuit_analysis_parameters* res = new shortcircuit_analysis_parameters();
+    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
+    auto res = newCOwned<shortcircuit_analysis_parameters>(deleteShortCircuitAnalysisParameters);
     res->with_voltage_result = (bool) with_voltage_result;
     res->with_feeder_result = (bool) with_feeder_result;
     res->with_limit_violations = (bool) with_limit_violations;
@@ -1989,12 +1939,7 @@ std::shared_ptr<shortcircuit_analysis_parameters> ShortCircuitAnalysisParameters
     res->initial_voltage_profile_mode = initial_voltage_profile_mode;
 
     providerParametersToCStruct(res->provider_parameters, provider_parameters_keys, provider_parameters_values);
-
-    //Memory has been allocated here on C side, we need to clean it up on C side (not java side)
-    return std::shared_ptr<shortcircuit_analysis_parameters>(res, [](shortcircuit_analysis_parameters* ptr){
-        deleteShortCircuitAnalysisParameters(ptr);
-        delete ptr;
-    });
+    return res;
 }
 
 void setDefaultShortCircuitAnalysisProvider(const std::string& shortCircuitAnalysisProvider) {
@@ -2028,18 +1973,15 @@ JavaHandle runShortCircuitAnalysis(const JavaHandle& shortCircuitAnalysisContext
 }
 
 ShortCircuitAnalysisParameters* createShortCircuitAnalysisParameters() {
-    shortcircuit_analysis_parameters* parameters_ptr = PowsyblCaller::get()->callJava<shortcircuit_analysis_parameters*>(::createShortCircuitAnalysisParameters);
-    auto parameters = std::shared_ptr<shortcircuit_analysis_parameters>(parameters_ptr, [](shortcircuit_analysis_parameters* ptr){
-        PowsyblCaller::get()->callJava(::freeShortCircuitAnalysisParameters, ptr);
-    });
+    //Memory has been allocated on java side, we need to clean it up on java side
+    auto parameters = PowsyblCaller::get()->callJavaOwned<shortcircuit_analysis_parameters>(::createShortCircuitAnalysisParameters, ::freeShortCircuitAnalysisParameters);
     return new ShortCircuitAnalysisParameters(parameters.get());
 }
 
 std::vector<SeriesMetadata> getFaultsMetaData() {
-    dataframe_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getFaultsDataframeMetaData);
-    std::vector<SeriesMetadata> res = convertDataframeMetadata(metadata);
-    PowsyblCaller::get()->callJava(::freeDataframeMetadata, metadata);
-    return res;
+    JavaUnique<dataframe_metadata, ::freeDataframeMetadata> metadata {
+        pypowsybl::PowsyblCaller::get()->callJava<dataframe_metadata*>(::getFaultsDataframeMetaData) };
+    return convertDataframeMetadata(metadata.get());
 }
 
 void setFaults(pypowsybl::JavaHandle analysisContext, dataframe* dataframe) {
@@ -2259,6 +2201,14 @@ SeriesArray* getCostResults(const JavaHandle& cracHandle, const JavaHandle& resu
     return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getCostResults, cracHandle, resultHandle));
 }
 
+SeriesArray* getGlobalCostResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getGlobalCostResults, cracHandle, resultHandle));
+}
+
+SeriesArray* getCostResultsForTimestamp(const JavaHandle& cracHandle, const JavaHandle& resultHandle, const std::string& timestamp) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getCostResultsForTimestamp, cracHandle, resultHandle, (char*) timestamp.c_str()));
+}
+
 std::vector<std::string> getVirtualCostNames(const JavaHandle& resultHandle) {
     auto virtulCostArrayPtr = pypowsybl::PowsyblCaller::get()->callJava<array*>(::getVirtualCostNames, resultHandle);
     ToStringVector virtalCosts(virtulCostArrayPtr);
@@ -2418,6 +2368,16 @@ JavaHandle runVoltageMonitoring(const JavaHandle& networkHandle, const JavaHandl
 JavaHandle runAngleMonitoring(const JavaHandle& networkHandle, const JavaHandle& resultHandle, const JavaHandle& cracHandle, const JavaHandle& contextHandle, const LoadFlowParameters& parameters, const std::string& provider) {
     auto c_loadflow_parameters = parameters.to_c_struct();
     return pypowsybl::PowsyblCaller::get()->callJava<JavaHandle>(::runAngleMonitoring, networkHandle, resultHandle, cracHandle, contextHandle, c_loadflow_parameters.get(), (char *) provider.data());
+}
+
+JavaHandle runMarmot(const std::vector<std::string>& timestamps, std::vector<JavaHandle>& networks, std::vector<JavaHandle>& cracs,
+                     const RaoParameters& parameters, const JavaHandle& constraints) {
+    auto c_parameters = parameters.to_c_struct();
+    int count = timestamps.size();
+    ToCharPtrPtr timestampsPtr(timestamps);
+    std::vector<void*> networksPtrs = objectHandleVectorToPtrs(networks);
+    std::vector<void*> cracPtrs = objectHandleVectorToPtrs(cracs);
+    return pypowsybl::PowsyblCaller::get()->callJava<JavaHandle>(::runMarmot, timestampsPtr.get(), (void**) networksPtrs.data(), (void**) cracPtrs.data(), count, c_parameters.get(), constraints);
 }
 
 

@@ -80,6 +80,31 @@ T callJava(F f, ARGS... args) {
     return r;
 }
 
+/**
+ * Same as callJava<T*>, but the returned pointer is wrapped in a shared_ptr whose deleter calls
+ * back into the matching java free entry point. Memory allocated on java side (UnmanagedMemory)
+ * is not reclaimed by the GC: it can only be released that way.
+ *
+ * The raw pointer never escapes, so a call site cannot obtain it without naming its free function
+ * in the same expression.
+ */
+template<typename T, typename F, typename FreeF, typename... ARGS>
+std::shared_ptr<T> callJavaOwned(F f, FreeF freeF, ARGS... args) {
+    T* ptr = callJava<T*>(f, args...);
+    if (ptr == nullptr) {
+        return nullptr;
+    }
+    // the singleton is re-fetched inside the deleter: the free may run much later, on another
+    // thread (python GC), so `this` must not be captured.
+    return std::shared_ptr<T>(ptr, [freeF](T* p) {
+        try {
+            PowsyblCaller::get()->callJava(freeF, p);
+        } catch (const std::exception&) {
+            // an exception escaping a deleter would call std::terminate
+        }
+    });
+}
+
 void setPreprocessingJavaCall(std::function <void(GraalVmGuard* guard, exception_handler* exc)> func);
 void setPostProcessingJavaCall(std::function<void()> func);
 
@@ -91,6 +116,42 @@ std::function <void(GraalVmGuard* guard, exception_handler* exc)> beginCall_;
 std::function <void()> endCall_;
 
 };
+
+/**
+ * Deleter for java allocated structs that are consumed and released inside a single C++ scope.
+ * Zero overhead (no control block), unlike callJavaOwned.
+ */
+template<auto FreeFn>
+struct JavaDeleter {
+    template<typename T>
+    void operator()(T* ptr) const {
+        if (ptr) {
+            try {
+                PowsyblCaller::get()->callJava(FreeFn, ptr);
+            } catch (const std::exception&) {
+                // an exception escaping a deleter would call std::terminate
+            }
+        }
+    }
+};
+
+template<typename T, auto FreeFn>
+using JavaUnique = std::unique_ptr<T, JavaDeleter<FreeFn>>;
+
+/**
+ * Allocates a struct on the C++ heap and binds its release (nested members first, then the struct
+ * itself) to its lifetime. Used by the to_c_struct() builders: unlike callJavaOwned, nothing calls
+ * back into java here. Wrapping before filling the struct also makes the fill exception safe, the
+ * value initialization above leaving the not yet filled members null.
+ */
+template<typename T, typename DeleteMembersF>
+std::shared_ptr<T> newCOwned(DeleteMembersF deleteMembers) {
+    T* res = new T();
+    return std::shared_ptr<T>(res, [deleteMembers](T* ptr) {
+        deleteMembers(ptr);
+        delete ptr;
+    });
+}
 
 template<typename T>
 class ToPtr {
@@ -191,6 +252,7 @@ typedef Array<operator_strategy_result> OperatorStrategyResultArray;
 typedef Array<limit_violation> LimitViolationArray;
 typedef Array<series> SeriesArray;
 
+std::vector<void*> objectHandleVectorToPtrs(std::vector<JavaHandle>& handles);
 
 template<typename T>
 std::vector<T> toVector(array* arrayPtr) {
@@ -685,6 +747,8 @@ void applySolvedTapPositionAndSolvedSectionCount(const JavaHandle& network);
 
 bool updateSwitchPosition(const JavaHandle& network, const std::string& id, bool open);
 
+bool updateDcSwitchPosition(const JavaHandle& network, const std::string& id, bool open);
+
 bool updateConnectableStatus(const JavaHandle& network, const std::string& id, bool connected, bool allowDisconnectors,
                              bool allowFictitious);
 
@@ -757,6 +821,8 @@ DynamicSimulationParameters* createDynamicSimulationParameters();
 std::string saveNetworkToString(const JavaHandle& network, const std::string& format, const std::map<std::string, std::string>& parameters, JavaHandle* reportNode);
 
 void reduceNetwork(const JavaHandle& network, const double v_min, const double v_max, const std::vector<std::string>& ids, const std::vector<std::string>& vls, const std::vector<int>& depths, bool withBoundaryLines);
+
+bool checkLoadFlowParameters(const LoadFlowParameters& parameters, const std::string& provider, JavaHandle* reportNode);
 
 LoadFlowComponentResultArray* runLoadFlow(const JavaHandle& network, const LoadFlowParameters& parameters, const std::string& provider, JavaHandle* reportNode);
 
@@ -842,9 +908,9 @@ void addFactorMatrix(const JavaHandle& sensitivityAnalysisContext, std::string m
 
 JavaHandle runSensitivityAnalysis(const JavaHandle& sensitivityAnalysisContext, const JavaHandle& network, SensitivityAnalysisParameters& parameters, const std::string& provider, JavaHandle* reportNode);
 
-matrix* getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string &contingencyId);
+std::shared_ptr<matrix> getSensitivityMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string &contingencyId);
 
-matrix* getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId);
+std::shared_ptr<matrix> getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId);
 
 SeriesArray* createNetworkElementsSeriesArray(const JavaHandle& network, element_type elementType, filter_attributes_type filterAttributesType, const std::vector<std::string>& attributes, dataframe* dataframe, bool perUnit, double nominalApparentPower);
 
@@ -914,7 +980,7 @@ void createElement(pypowsybl::JavaHandle network, dataframe_array* dataframes, e
 
 ::validation_level_type getValidationLevel(const JavaHandle& network);
 
-::validation_level_type validate(const JavaHandle& network);
+::validation_level_type validate(const JavaHandle& network, JavaHandle* reportNode);
 
 void setMinValidationLevel(pypowsybl::JavaHandle network, validation_level_type validationLevel);
 
@@ -1101,6 +1167,8 @@ SeriesArray* getNetworkActionResults(const JavaHandle& cracHandle, const JavaHan
 SeriesArray* getPstRangeActionResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle);
 SeriesArray* getRangeActionResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle);
 SeriesArray* getCostResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle);
+SeriesArray* getGlobalCostResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle);
+SeriesArray* getCostResultsForTimestamp(const JavaHandle& cracHandle, const JavaHandle& resultHandle, const std::string& timestamp);
 std::vector<std::string> getVirtualCostNames(const JavaHandle& resultHandle);
 SeriesArray* getVirtualCostsResults(const JavaHandle& cracHandle, const JavaHandle& resultHandle, const std::string& virtualCostName);
 
@@ -1143,6 +1211,8 @@ JavaHandle createDefaultRaoParameters();
 JavaHandle runRaoWithParameters(const JavaHandle& networkHandle, const JavaHandle& cracHandle, const JavaHandle& raoHandle, const RaoParameters& parameters, const std::string& raoProvider);
 JavaHandle runVoltageMonitoring(const JavaHandle& networkHandle, const JavaHandle& resultHandle, const JavaHandle& cracHandle, const JavaHandle& contextHandle, const LoadFlowParameters& parameters, const std::string& provider);
 JavaHandle runAngleMonitoring(const JavaHandle& networkHandle, const JavaHandle& resultHandle, const JavaHandle& cracHandle, const JavaHandle& contextHandle, const LoadFlowParameters& parameters, const std::string& provider);
+JavaHandle runMarmot(const std::vector<std::string>& timestamps, std::vector<JavaHandle>& networks, std::vector<JavaHandle>& cracs,
+                     const RaoParameters& parameters, const JavaHandle& constraints);
 
 JavaHandle createGrid2opBackend(const JavaHandle& networkHandle, bool considerOpenBranchReactiveFlow, bool checkIsolatedAndDisconnectedInjections, int busesPerVoltageLevel, bool connectAllElementsToFirstBus);
 void freeGrid2opBackend(const JavaHandle& backendHandle);
