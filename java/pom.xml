@@ -70,10 +70,22 @@
         <java.version>21</java.version>
         <powsybl-dependencies.version>2026.0.0</powsybl-dependencies.version>
         <powsybl-open-reac.version>0.17.0</powsybl-open-reac.version>
+        <!-- TODO(dev-only): local build of powsybl-dynawo-simulation carrying
+             DynawoSimulationParameters.setAdditionalModels (programmatic additional models),
+             compiled against the powsybl-core pinned by powsybl-dependencies. Drop this override
+             once a powsybl-dependencies release ships the feature. -->
+        <powsybl-dynawo-simulation.version>3.4.0-SNAPSHOT</powsybl-dynawo-simulation.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Overrides only powsybl-dynawo-simulation; every other dynawo artifact keeps the
+                 version managed by powsybl-dependencies. This explicit entry wins over the BOM. -->
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-simulation</artifactId>
+                <version>${powsybl-dynawo-simulation.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.powsybl</groupId>
                 <artifactId>powsybl-dependencies</artifactId>

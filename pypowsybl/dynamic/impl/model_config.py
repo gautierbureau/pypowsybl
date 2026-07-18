@@ -5,22 +5,39 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """
-Python equivalent of the Dynawo ``additionalModelsFile`` (``models.json``).
+Python equivalent of the Dynawo additional dynamic model definitions.
 
-Instead of authoring a JSON file by hand and pointing the ``additionalModelsFile``
-provider parameter at it, additional dynamic model definitions can be described
-directly as :class:`ModelConfig` objects and passed to
-:class:`pypowsybl.dynamic.Parameters`. pypowsybl serializes them to a temporary
-``models.json`` and wires the ``additionalModelsFile`` parameter automatically.
+Additional dynamic models can be described directly as :class:`ModelConfig` objects and passed to
+:class:`pypowsybl.dynamic.Parameters`. They are marshalled to the native layer as a dataframe and
+registered on the Dynawo simulation parameters (``DynawoSimulationParameters.setAdditionalModels``),
+so no ``models.json`` file has to be authored by hand.
 
 Each :class:`ModelConfig` mirrors one entry of the Dynawo ``models.json`` schema.
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-# Provider parameter key understood by ``DynawoSimulationParameters`` to locate
-# the additional models JSON file.
-ADDITIONAL_MODELS_FILE_KEY = "additionalModelsFile"
+import pandas as pd
+from pypowsybl import _pypowsybl
+from pypowsybl.utils import _create_c_dataframe  # pylint: disable=protected-access
+
+# String series type expected by the native dataframe layer.
+_STRING_SERIES_TYPE = 0
+
+# Fixed schema of the additional-models dataframe (all string columns, ``category`` as index).
+_ADDITIONAL_MODELS_METADATA = [
+    _pypowsybl.SeriesMetadata('category', _STRING_SERIES_TYPE, True, False, False),
+    _pypowsybl.SeriesMetadata('lib', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('doc', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('alias', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('internal_model_prefix', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('properties', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('min_version', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('max_version', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('end_cause', _STRING_SERIES_TYPE, False, False, False),
+]
+
+_ADDITIONAL_MODELS_COLUMNS = [s.name for s in _ADDITIONAL_MODELS_METADATA]
 
 
 @dataclass
@@ -71,39 +88,23 @@ class ModelConfig:
         """Name used to reference this model (``alias`` if set, else ``lib``)."""
         return self.alias if self.alias else self.lib
 
-    def _to_json_entry(self) -> Dict[str, Any]:
-        """Serialize this model to one ``libs`` entry of the models.json schema."""
-        entry: Dict[str, Any] = {"lib": self.lib}
-        if self.alias:
-            entry["alias"] = self.alias
-        if self.internal_model_prefix:
-            entry["internalModelPrefix"] = self.internal_model_prefix
-        if self.doc:
-            entry["doc"] = self.doc
-        if self.properties:
-            entry["properties"] = list(self.properties)
-        if self.min_version:
-            entry["minVersion"] = self.min_version
-        if self.max_version:
-            entry["maxVersion"] = self.max_version
-        if self.end_cause:
-            entry["endCause"] = self.end_cause
-        return entry
 
-
-def serialize_model_configs(model_configs: List[ModelConfig]) -> Dict[str, Any]:
+def _to_c_dataframe(model_configs: List[ModelConfig]) -> _pypowsybl.Dataframe:
     """
-    Serialize a list of :class:`ModelConfig` to the Dynawo ``models.json``
-    structure: a mapping of category name to ``{"libs": [entry, ...]}``.
-
-    Args:
-        model_configs: the additional models to serialize.
-
-    Returns:
-        a JSON-serializable dictionary following the Dynawo models.json schema.
+    Build the native dataframe (one row per model) consumed by
+    ``_pypowsybl.add_additional_models``. ``category`` is the index column; the
+    ``properties`` list is encoded as a comma-separated string.
     """
-    catalog: Dict[str, Any] = {}
-    for model_config in model_configs:
-        category = catalog.setdefault(model_config.category, {"libs": []})
-        category["libs"].append(model_config._to_json_entry())  # pylint: disable=protected-access
-    return catalog
+    records = [{
+        'category': model_config.category,
+        'lib': model_config.lib,
+        'doc': model_config.doc,
+        'alias': model_config.alias,
+        'internal_model_prefix': model_config.internal_model_prefix,
+        'properties': ','.join(model_config.properties),
+        'min_version': model_config.min_version,
+        'max_version': model_config.max_version,
+        'end_cause': model_config.end_cause,
+    } for model_config in model_configs]
+    dataframe = pd.DataFrame(records, columns=_ADDITIONAL_MODELS_COLUMNS).set_index('category')
+    return _create_c_dataframe(dataframe.fillna(''), _ADDITIONAL_MODELS_METADATA)

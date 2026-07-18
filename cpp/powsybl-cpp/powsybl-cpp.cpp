@@ -1795,6 +1795,10 @@ void addEventMappings(JavaHandle eventMappingHandle, std::string eventName, data
     PowsyblCaller::get()->callJava<>(::addEventMappings, eventMappingHandle, (char*) eventName.c_str(), mappingDf);
 }
 
+void addAdditionalModels(JavaHandle dynamicContextHandle, dataframe* additionalModelsDf) {
+    PowsyblCaller::get()->callJava<>(::addAdditionalModels, dynamicContextHandle, additionalModelsDf);
+}
+
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType) {
     ToCharPtrPtr variablesPtr(variables);
     PowsyblCaller::get()->callJava<>(::addOutputVariables, outputVariablesHandle, (char*) dynamicId.c_str(), variablesPtr.get(), variables.size(), variableType);

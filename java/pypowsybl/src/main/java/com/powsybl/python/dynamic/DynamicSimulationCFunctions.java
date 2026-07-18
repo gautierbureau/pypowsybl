@@ -144,6 +144,8 @@ public final class DynamicSimulationCFunctions {
                 }
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
+                DynamicSimulationParametersCUtils.applyAdditionalModels(dynamicSimulationParameters,
+                        dynamicContext.getAdditionalModels());
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -171,6 +173,21 @@ public final class DynamicSimulationCFunctions {
                     mappingDataframes.add(createDataframe(mappingDataframePtr.getDataframes().addressOf(i)));
                 }
                 DynamicMappingHandler.addElements(categoryName, dynamicMapping, mappingDataframes);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "addAdditionalModels")
+    public static void addAdditionalModels(IsolateThread thread, ObjectHandle dynamicContextHandle,
+                                           DataframePointer additionalModelsDataframePtr,
+                                           ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                DynamicSimulationContext dynamicContext = ObjectHandles.getGlobal().get(dynamicContextHandle);
+                UpdatingDataframe additionalModelsDataframe = createDataframe(additionalModelsDataframePtr);
+                dynamicContext.setAdditionalModels(
+                        DynamicSimulationParametersCUtils.readAdditionalModels(additionalModelsDataframe));
             }
         });
     }
