@@ -1807,6 +1807,10 @@ JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle netwo
     c_parameters.get(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
+SeriesArray* getParameterCompletions(JavaHandle dynamicMappingHandle, JavaHandle networkHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getParameterCompletions, dynamicMappingHandle, networkHandle));
+}
+
 SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle) {
     return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedParameters, dynamicMappingHandle));
 }
@@ -1824,8 +1828,8 @@ SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle network
     return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedModels, dynamicMappingHandle, networkHandle));
 }
 
-void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {
-    PowsyblCaller::get()->callJava<>(::updateDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes);
+void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes, int strict) {
+    PowsyblCaller::get()->callJava<>(::updateDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes, strict);
 }
 
 void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName) {

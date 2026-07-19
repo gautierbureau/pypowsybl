@@ -61,7 +61,7 @@ class ModelMapping:
         _pp.apply_model_mapping(self._handle, network._handle, mapping_name)
 
     def update_dynamic_model(self, category_name: str, df: Optional[Union[DataFrame, List[Optional[DataFrame]]]] = None,
-                             **kwargs: ArrayLike) -> None:
+                             strict: Optional[bool] = None, **kwargs: ArrayLike) -> None:
         """
         Describe equipments, replacing the description already in place where there is one.
 
@@ -72,6 +72,8 @@ class ModelMapping:
         Args:
             category_name: dynamic model category
             df: Attributes as a dataframe.
+            strict: whether a parameter set that does not value the new model is refused rather
+                than completed for it. Leave it out to follow the platform configuration.
             kwargs: Attributes as keyword arguments.
 
         Examples:
@@ -86,7 +88,8 @@ class ModelMapping:
         dfs: List[Optional[DataFrame]] = df if isinstance(df, List) else [df]
         metadata = _pp.get_dynamic_mappings_meta_data(category_name)
         c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
-        _pp.update_all_dynamic_mappings(self._handle, category_name, c_dfs)
+        _pp.update_all_dynamic_mappings(self._handle, category_name, c_dfs,
+                                        -1 if strict is None else int(strict))
 
     def get_models(self, network: Network) -> DataFrame:
         """
@@ -141,6 +144,25 @@ class ModelMapping:
             parameters_file: path of the parameters file
         """
         _pp.load_mapped_parameters(self._handle, parameters_file)
+
+    def get_parameter_completions(self, network: Network) -> DataFrame:
+        """
+        What had to be added for the models given to equipments after their parameters were
+        written, one row per parameter.
+
+        Giving a machine another model leaves its parameters describing the model it had. What the
+        new one asks for on top of them is derived into a set of its own, leaving the one the study
+        holds untouched, and this says what that was before anything is run.
+
+        Args:
+            network: the network the models are built against
+
+        Returns:
+            a dataframe indexed by static id, holding the model, the set the parameters were
+            written in, the set derived from it, and each parameter added with its value
+        """
+        return create_data_frame_from_series_array(
+            _pp.get_parameter_completions(self._handle, network._handle))  # pylint: disable=protected-access
 
     def get_categories_names(self) -> List[str]:
         """

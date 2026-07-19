@@ -154,9 +154,9 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
     pypowsybl::addDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
 }
 
-void updateDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::string category_name, const std::vector<dataframe*>& dataframes) {
+void updateDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::string category_name, const std::vector<dataframe*>& dataframes, int strict) {
     std::shared_ptr<dataframe_array> dataframeArray = ::createDataframeArray(dataframes);
-    pypowsybl::updateDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
+    pypowsybl::updateDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get(), strict);
 }
 
 template<typename T>
@@ -219,9 +219,10 @@ void dynamicSimulationBindings(py::module_& m) {
 
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));
-    m.def("update_all_dynamic_mappings", ::updateDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));
+    m.def("update_all_dynamic_mappings", ::updateDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"), py::arg("strict"));
     m.def("get_mapped_models", &pypowsybl::getMappedModels, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
     m.def("get_mapped_parameters", &pypowsybl::getMappedParameters, py::arg("dynamic_mapping_handle"));
+    m.def("get_parameter_completions", &pypowsybl::getParameterCompletions, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
     m.def("update_mapped_parameter", &pypowsybl::updateMappedParameter, py::arg("dynamic_mapping_handle"),
           py::arg("parameter_set_id"), py::arg("parameter_name"), py::arg("value"));
     m.def("load_mapped_parameters", &pypowsybl::loadMappedParameters, py::arg("dynamic_mapping_handle"), py::arg("parameters_file"));

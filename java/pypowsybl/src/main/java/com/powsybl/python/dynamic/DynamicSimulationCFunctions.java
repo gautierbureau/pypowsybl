@@ -113,6 +113,7 @@ public final class DynamicSimulationCFunctions {
                 // the models are built here, against this network, and handed over one by one
                 models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
                 supplier.setMappingParameters(dynawoParameters);
+                supplier.setDescriptions(ModelDescriptionLookup.fromModelDatabase(homeDir));
             }
         });
     }
@@ -160,6 +161,23 @@ public final class DynamicSimulationCFunctions {
                 String parametersFile = CTypeUtil.toString(parametersFilePtr);
                 supplier.getOrCreateMappingParameters()
                         .setModelsParameters(ParametersXml.load(Path.of(parametersFile)));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getParameterCompletions")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getParameterCompletions(IsolateThread thread,
+                                                                                         ObjectHandle dynamicMappingHandle,
+                                                                                         ObjectHandle networkHandle,
+                                                                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                supplier.get(network, ReportNode.NO_OP);
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.parameterCompletionsDataFrameMapper(),
+                        supplier.getCompletions());
             }
         });
     }
@@ -250,8 +268,11 @@ public final class DynamicSimulationCFunctions {
                 }
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
+                // the models are built first, so that the sets derived for them are known
+                dynamicMapping.get(network, reportNode);
                 dynamicMapping.getMappingParameters().ifPresent(mappingParameters ->
-                        dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, mappingParameters));
+                        dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class,
+                                dynamicMapping.getRunParameters()));
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -268,10 +289,14 @@ public final class DynamicSimulationCFunctions {
     public static void updateDynamicMappings(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                              CCharPointer categoryNamePtr,
                                              DataframeArrayPointer mappingDataframePtr,
+                                             int strict,
                                              ExceptionHandlerPointer exceptionHandlerPtr) {
         doCatch(exceptionHandlerPtr, new Runnable() {
             @Override
             public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                // below zero the study said nothing and the configuration decides
+                supplier.setStrict(strict < 0 ? null : strict > 0);
                 addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
                         PythonDynamicModelsSupplier.Mode.KEEP_LAST);
 

@@ -16,6 +16,7 @@ import com.powsybl.dynawo.builders.ModelInfo;
 import com.powsybl.dynawo.models.BlackBoxModel;
 import com.powsybl.dynawo.parameters.Parameter;
 import com.powsybl.dynawo.parameters.ParametersSet;
+import com.powsybl.python.dynamic.ParameterCompletion;
 import com.powsybl.python.dynamic.PythonDynamicModelsSupplier;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -91,6 +92,23 @@ public final class DynamicSimulationDataframeMappersUtils {
                 .stringsIndex("parameter_set_id", Pair::getKey)
                 .strings("name", p -> p.getValue().name())
                 .strings("type", p -> p.getValue().type().name())
+                .strings("value", p -> p.getValue().value())
+                .build();
+    }
+
+    /**
+     * What had to be added for the models given to equipments after their parameters were written,
+     * one row per parameter, so that a study reads what a run would use before running it.
+     */
+    public static DataframeMapper<Collection<ParameterCompletion>, Void> parameterCompletionsDataFrameMapper() {
+        return new DataframeMapperBuilder<Collection<ParameterCompletion>, Pair<ParameterCompletion, Parameter>, Void>()
+                .itemsStreamProvider(completions -> completions.stream()
+                        .flatMap(c -> c.added().stream().map(p -> Pair.of(c, p))))
+                .stringsIndex("static_id", p -> p.getKey().equipment())
+                .strings("model", p -> p.getKey().model())
+                .strings("source_parameter_set_id", p -> p.getKey().sourceId())
+                .strings("parameter_set_id", p -> p.getKey().completedId())
+                .strings("name", p -> p.getValue().name())
                 .strings("value", p -> p.getValue().value())
                 .build();
     }

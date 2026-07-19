@@ -11,7 +11,18 @@ import com.powsybl.commons.report.ReportNode;
 import com.powsybl.dynamicsimulation.DynamicModel;
 import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.commons.PowsyblException;
+import com.powsybl.dynawo.mappings.MappingConfig;
+import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
+import com.powsybl.dynawo.mappings.parameters.ParametersSetCompleter;
+import com.powsybl.dynawo.desc.ModelDescription;
+import com.powsybl.dynawo.models.AbstractBlackBoxModel;
 import com.powsybl.dynawo.models.EquipmentBlackBoxModel;
+import com.powsybl.dynawo.parameters.Parameter;
+import com.powsybl.dynawo.parameters.ParametersSet;
+import com.powsybl.iidm.network.Generator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.powsybl.iidm.network.Network;
 
 import java.util.ArrayList;
@@ -27,6 +38,8 @@ import java.util.function.BiFunction;
  * @author Laurent Issertial {@literal <laurent.issertial at rte-france.com>}
  */
 public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PythonDynamicModelsSupplier.class);
 
     /**
      * What becomes of an equipment described twice.
@@ -62,9 +75,31 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
      */
     private Mode defaultMode = Mode.KEEP_FIRST;
 
+    /**
+     * Where the parameters a model declares are read from, kept from the mapping that was applied
+     * so that a model given to an equipment afterwards can be valued.
+     */
+    private ModelDescriptionLookup descriptions;
+
+    /**
+     * Sets derived for the models the study's own parameters do not value, rebuilt each time the
+     * models are, so that reading them twice says the same thing.
+     */
+    private final List<ParameterCompletion> completions = new ArrayList<>();
+
     @Override
     public String getName() {
         return getClass().getSimpleName();
+    }
+
+    /**
+     * Whether a set that does not value the model it is given is completed or refused.
+     * <p>
+     * A deployment that must not see a parameter appear on its own says so in its configuration,
+     * and a study overrides it call by call.
+     */
+    private static boolean isStrict(Boolean strict) {
+        return strict != null ? strict : MappingConfig.load().isStrict();
     }
 
     @Override
@@ -87,7 +122,71 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
         }
         List<DynamicModel> models = new ArrayList<>(describedEquipments.values());
         models.addAll(others);
+        completions.clear();
+        models.forEach(this::completeParameters);
         return models;
+    }
+
+    /**
+     * Derives, for a model given to an equipment after its parameters were written, a set valuing
+     * it. The set the study holds is left as it is: what the model needs on top of it is kept
+     * beside it, to be read before a run and handed to the simulation when it starts.
+     */
+    private void completeParameters(DynamicModel model) {
+        if (descriptions == null || mappingParameters == null
+                || !(model instanceof EquipmentBlackBoxModel equipmentModel)
+                || !(model instanceof AbstractBlackBoxModel valuedModel)
+                || !(equipmentModel.getEquipment() instanceof Generator equipment)) {
+            return;
+        }
+        ParametersSet set = mappingParameters.getModelParameters().stream()
+                .filter(s -> s.getId().equals(equipmentModel.getParameterSetId()))
+                .findFirst()
+                .orElse(null);
+        if (set == null) {
+            return;
+        }
+        ModelDescription description = descriptions.find(equipmentModel.getLib()).orElse(null);
+        if (description == null) {
+            return;
+        }
+        List<String> missing = ParametersSetCompleter.missingParameters(set, description);
+        if (missing.isEmpty()) {
+            return;
+        }
+        if (isStrict(strict)) {
+            throw new PowsyblException("Parameter set " + set.getId() + " does not value model "
+                    + equipmentModel.getLib() + " of " + equipment.getId() + ", it lacks " + missing);
+        }
+        String completedId = set.getId() + "_" + equipmentModel.getLib();
+        ParametersSet completed = new ParametersSetCompleter()
+                .complete(completedId, set, description, equipment, description.name().contains("Tfo"));
+        List<Parameter> added = missing.stream()
+                .map(name -> completed.getParameters().get(name))
+                .filter(Objects::nonNull)
+                .toList();
+        completions.add(new ParameterCompletion(equipment.getId(), equipmentModel.getLib(), set, completed, added));
+        valuedModel.setParameterSetId(completedId);
+        LOGGER.info("Set {} did not value model {} of {}, {} derived from it holds {} more",
+                set.getId(), equipmentModel.getLib(), equipment.getId(), completedId, added.size());
+    }
+
+    /**
+     * What had to be added for the models given to equipments after their parameters were written.
+     * Reading it says what a run would use before it is run.
+     */
+    public List<ParameterCompletion> getCompletions() {
+        return List.copyOf(completions);
+    }
+
+    /**
+     * The settings a simulation runs with: the ones the study holds, and the sets derived for the
+     * models that its own do not value.
+     */
+    public DynawoSimulationParameters getRunParameters() {
+        DynawoSimulationParameters parameters = getOrCreateMappingParameters();
+        completions.forEach(completion -> parameters.addModelParameters(completion.completed()));
+        return parameters;
     }
 
     /**
@@ -110,6 +209,19 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
 
     public void addModel(BiFunction<Network, ReportNode, DynamicModel> modelFunction, Mode mode) {
         entries.add(new Entry(modelFunction, Objects.requireNonNull(mode)));
+    }
+
+    /**
+     * Follows the configuration when null, which is what a study that says nothing gets.
+     */
+    private Boolean strict;
+
+    public void setStrict(Boolean strict) {
+        this.strict = strict;
+    }
+
+    public void setDescriptions(ModelDescriptionLookup descriptions) {
+        this.descriptions = descriptions;
     }
 
     public void setMappingParameters(DynawoSimulationParameters mappingParameters) {
