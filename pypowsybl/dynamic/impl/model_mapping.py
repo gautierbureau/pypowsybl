@@ -8,6 +8,7 @@ from typing import List, Optional, Union
 from numpy.typing import ArrayLike
 from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
+from pypowsybl.network import Network
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 
 
@@ -18,6 +19,41 @@ class ModelMapping:
 
     def __init__(self) -> None:
         self._handle = _pp.create_dynamic_model_mapping()
+
+    def create_dynawaltz(self, network: Network) -> None:
+        """
+        Describe every synchronous generator of the network for a voltage stability study.
+
+        The controls of each machine are deduced from its characteristics, then simplified, and
+        the parameters the models need are generated along with them, so that the mapping is
+        enough to run a simulation.
+
+        Args:
+            network: the network to describe, which a load flow must have been run on
+        """
+        self.apply('UniversalDynaWaltz', network)
+
+    def create_dynaswing(self, network: Network) -> None:
+        """
+        Describe every synchronous generator of the network for a transient study.
+
+        Same description as :func:`create_dynawaltz`, keeping the detailed controls instead of
+        simplifying them.
+
+        Args:
+            network: the network to describe, which a load flow must have been run on
+        """
+        self.apply('UniversalDynaSwing', network)
+
+    def apply(self, mapping_name: str, network: Network) -> None:
+        """
+        Apply a mapping registered in the java side, adding its models to this mapping.
+
+        Args:
+            mapping_name: name of the mapping, for instance UniversalDynaWaltz or IeeeDynaWaltz
+            network: the network to describe
+        """
+        _pp.apply_model_mapping(self._handle, network._handle, mapping_name)
 
     def get_categories_names(self) -> List[str]:
         """

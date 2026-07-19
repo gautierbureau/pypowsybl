@@ -203,6 +203,8 @@ void dynamicSimulationBindings(py::module_& m) {
     //entrypoints for constructors
     m.def("create_dynamic_simulation_context", &pypowsybl::createDynamicSimulationContext);
     m.def("create_dynamic_model_mapping", &pypowsybl::createDynamicModelMapping);
+    m.def("apply_model_mapping", &pypowsybl::applyModelMapping, py::arg("dynamic_mapping_handle"),
+          py::arg("network_handle"), py::arg("mapping_name"));
     m.def("create_timeseries_mapping", &pypowsybl::createTimeseriesMapping);
     m.def("create_event_mapping", &pypowsybl::createEventMapping);
 

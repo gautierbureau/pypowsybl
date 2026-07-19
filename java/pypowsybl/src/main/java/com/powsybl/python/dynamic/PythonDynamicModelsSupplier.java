@@ -10,11 +10,13 @@ package com.powsybl.python.dynamic;
 import com.powsybl.commons.report.ReportNode;
 import com.powsybl.dynamicsimulation.DynamicModel;
 import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
+import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.iidm.network.Network;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 
 /**
@@ -24,6 +26,13 @@ import java.util.function.BiFunction;
 public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
 
     private final List<BiFunction<Network, ReportNode, DynamicModel>> dynamicModelList = new ArrayList<>();
+
+    /**
+     * Settings a mapping generated along with its models, the parameters of each model among them.
+     * They travel with the models because they describe them: a set is written for one model of one
+     * equipment and means nothing without it.
+     */
+    private DynawoSimulationParameters mappingParameters;
 
     @Override
     public String getName() {
@@ -38,5 +47,13 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
 
     public void addModel(BiFunction<Network, ReportNode, DynamicModel> modelFunction) {
         dynamicModelList.add(modelFunction);
+    }
+
+    public void setMappingParameters(DynawoSimulationParameters mappingParameters) {
+        this.mappingParameters = mappingParameters;
+    }
+
+    public Optional<DynawoSimulationParameters> getMappingParameters() {
+        return Optional.ofNullable(mappingParameters);
     }
 }

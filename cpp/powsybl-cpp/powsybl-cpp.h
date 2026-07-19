@@ -992,6 +992,8 @@ NadParameters* createNadParameters();
 //handle creation
 JavaHandle createDynamicSimulationContext();
 JavaHandle createDynamicModelMapping();
+
+void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName);
 JavaHandle createTimeseriesMapping();
 JavaHandle createEventMapping();
 

@@ -45,7 +45,14 @@ import com.powsybl.dynamicsimulation.OutputVariablesSupplier;
 import com.powsybl.dynamicsimulation.DynamicSimulationParameters;
 import com.powsybl.dynamicsimulation.DynamicSimulationResult;
 import com.powsybl.dynamicsimulation.EventModelsSupplier;
+import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
+import com.powsybl.dynawo.DynawoSimulationConfig;
+import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.dynawo.mappings.DynamicModelsMappings;
+import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
 import com.powsybl.iidm.network.Network;
+
+import java.nio.file.Path;
 import com.powsybl.python.commons.CTypeUtil;
 import com.powsybl.python.commons.Directives;
 import com.powsybl.python.commons.PyPowsyblApiHeader.ArrayPointer;
@@ -79,6 +86,25 @@ public final class DynamicSimulationCFunctions {
     public static ObjectHandle createDynamicModelMapping(IsolateThread thread,
             ExceptionHandlerPointer exceptionHandlerPtr) {
         return doCatch(exceptionHandlerPtr, () -> ObjectHandles.getGlobal().create(new PythonDynamicModelsSupplier()));
+    }
+
+    @CEntryPoint(name = "applyModelMapping")
+    public static void applyModelMapping(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                         ObjectHandle networkHandle, CCharPointer mappingNamePtr,
+                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, () -> {
+            PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+            Network network = ObjectHandles.getGlobal().get(networkHandle);
+            String mappingName = CTypeUtil.toString(mappingNamePtr);
+
+            DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
+            Path homeDir = DynawoSimulationConfig.load().getHomeDir();
+            DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
+                    .apply(mappingName, network, dynawoParameters, ModelDescriptionLookup.fromModelDatabase(homeDir));
+            // the models are built here, against this network, and handed over one by one
+            models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
+            supplier.setMappingParameters(dynawoParameters);
+        });
     }
 
     @CEntryPoint(name = "createTimeseriesMapping")
@@ -144,6 +170,8 @@ public final class DynamicSimulationCFunctions {
                 }
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
+                dynamicMapping.getMappingParameters().ifPresent(mappingParameters ->
+                        dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, mappingParameters));
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,

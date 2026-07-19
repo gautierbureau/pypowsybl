@@ -1807,6 +1807,10 @@ JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle netwo
     c_parameters.get(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
+void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName) {
+    PowsyblCaller::get()->callJava<>(::applyModelMapping, dynamicMappingHandle, networkHandle, (char*) mappingName.c_str());
+}
+
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {
     PowsyblCaller::get()->callJava<>(::addDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes);
 }
