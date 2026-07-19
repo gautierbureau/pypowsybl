@@ -92,18 +92,23 @@ public final class DynamicSimulationCFunctions {
     public static void applyModelMapping(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                          ObjectHandle networkHandle, CCharPointer mappingNamePtr,
                                          ExceptionHandlerPointer exceptionHandlerPtr) {
-        doCatch(exceptionHandlerPtr, () -> {
-            PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
-            Network network = ObjectHandles.getGlobal().get(networkHandle);
-            String mappingName = CTypeUtil.toString(mappingNamePtr);
+        // an explicit class rather than a lambda: the handles and the pointer are word values,
+        // which a lambda cannot capture
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String mappingName = CTypeUtil.toString(mappingNamePtr);
 
-            DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
-            Path homeDir = DynawoSimulationConfig.load().getHomeDir();
-            DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
-                    .apply(mappingName, network, dynawoParameters, ModelDescriptionLookup.fromModelDatabase(homeDir));
-            // the models are built here, against this network, and handed over one by one
-            models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
-            supplier.setMappingParameters(dynawoParameters);
+                DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
+                Path homeDir = DynawoSimulationConfig.load().getHomeDir();
+                DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
+                        .apply(mappingName, network, dynawoParameters, ModelDescriptionLookup.fromModelDatabase(homeDir));
+                // the models are built here, against this network, and handed over one by one
+                models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
+                supplier.setMappingParameters(dynawoParameters);
+            }
         });
     }
 
