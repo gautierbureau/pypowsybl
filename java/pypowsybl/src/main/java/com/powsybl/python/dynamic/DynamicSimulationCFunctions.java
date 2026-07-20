@@ -45,7 +45,19 @@ import com.powsybl.dynamicsimulation.OutputVariablesSupplier;
 import com.powsybl.dynamicsimulation.DynamicSimulationParameters;
 import com.powsybl.dynamicsimulation.DynamicSimulationResult;
 import com.powsybl.dynamicsimulation.EventModelsSupplier;
+import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
+import com.powsybl.dynawo.DynawoSimulationConfig;
+import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.dynawo.mappings.DynamicModelsMappings;
+import com.powsybl.commons.PowsyblException;
+import com.powsybl.dynawo.models.BlackBoxModel;
+import com.powsybl.dynawo.parameters.ParametersSet;
+import com.powsybl.dynawo.xml.ParametersXml;
+import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
 import com.powsybl.iidm.network.Network;
+
+import java.nio.file.Path;
+import java.util.Collection;
 import com.powsybl.python.commons.CTypeUtil;
 import com.powsybl.python.commons.Directives;
 import com.powsybl.python.commons.PyPowsyblApiHeader.ArrayPointer;
@@ -79,6 +91,118 @@ public final class DynamicSimulationCFunctions {
     public static ObjectHandle createDynamicModelMapping(IsolateThread thread,
             ExceptionHandlerPointer exceptionHandlerPtr) {
         return doCatch(exceptionHandlerPtr, () -> ObjectHandles.getGlobal().create(new PythonDynamicModelsSupplier()));
+    }
+
+    @CEntryPoint(name = "applyModelMapping")
+    public static void applyModelMapping(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                         ObjectHandle networkHandle, CCharPointer mappingNamePtr,
+                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        // an explicit class rather than a lambda: the handles and the pointer are word values,
+        // which a lambda cannot capture
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String mappingName = CTypeUtil.toString(mappingNamePtr);
+
+                DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
+                Path homeDir = DynawoSimulationConfig.load().getHomeDir();
+                DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
+                        .apply(mappingName, network, dynawoParameters, ModelDescriptionLookup.fromModelDatabase(homeDir));
+                // the models are built here, against this network, and handed over one by one
+                models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
+                supplier.setMappingParameters(dynawoParameters);
+                supplier.setDescriptions(ModelDescriptionLookup.fromModelDatabase(homeDir));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getMappedModels")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMappedModels(IsolateThread thread,
+                                                                                 ObjectHandle dynamicMappingHandle,
+                                                                                 ObjectHandle networkHandle,
+                                                                                 ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                List<BlackBoxModel> models = supplier.get(network, ReportNode.NO_OP).stream()
+                        .filter(BlackBoxModel.class::isInstance)
+                        .map(BlackBoxModel.class::cast)
+                        .toList();
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.mappedModelsDataFrameMapper(), models);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getMappedParameters")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMappedParameters(IsolateThread thread,
+                                                                                     ObjectHandle dynamicMappingHandle,
+                                                                                     ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Collection<ParametersSet> sets = supplier.getOrCreateMappingParameters().getModelParameters();
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.mappedParametersDataFrameMapper(), sets);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "loadMappedParameters")
+    public static void loadMappedParameters(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                            CCharPointer parametersFilePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                String parametersFile = CTypeUtil.toString(parametersFilePtr);
+                supplier.getOrCreateMappingParameters()
+                        .setModelsParameters(ParametersXml.load(Path.of(parametersFile)));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getParameterCompletions")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getParameterCompletions(IsolateThread thread,
+                                                                                         ObjectHandle dynamicMappingHandle,
+                                                                                         ObjectHandle networkHandle,
+                                                                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                supplier.get(network, ReportNode.NO_OP);
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.parameterCompletionsDataFrameMapper(),
+                        supplier.getCompletions());
+            }
+        });
+    }
+
+    @CEntryPoint(name = "updateMappedParameter")
+    public static void updateMappedParameter(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                             CCharPointer parameterSetIdPtr, CCharPointer parameterNamePtr,
+                                             CCharPointer valuePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                String parameterSetId = CTypeUtil.toString(parameterSetIdPtr);
+                String parameterName = CTypeUtil.toString(parameterNamePtr);
+                String value = CTypeUtil.toString(valuePtr);
+                DynawoSimulationParameters parameters = supplier.getOrCreateMappingParameters();
+                ParametersSet set = parameters.getModelParameters(parameterSetId);
+                com.powsybl.dynawo.parameters.Parameter parameter = set.getParameters().get(parameterName);
+                if (parameter == null) {
+                    throw new PowsyblException("Parameter " + parameterName + " not found in set " + parameterSetId);
+                }
+                // the type is the one the model declares, only the value is the study's to choose
+                set.replaceParameter(parameterName, parameter.type(), value);
+            }
+        });
     }
 
     @CEntryPoint(name = "createTimeseriesMapping")
@@ -144,6 +268,11 @@ public final class DynamicSimulationCFunctions {
                 }
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
+                // the models are built first, so that the sets derived for them are known
+                dynamicMapping.get(network, reportNode);
+                dynamicMapping.getMappingParameters().ifPresent(mappingParameters ->
+                        dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class,
+                                dynamicMapping.getRunParameters()));
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -156,6 +285,25 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
+    @CEntryPoint(name = "updateDynamicMappings")
+    public static void updateDynamicMappings(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                             CCharPointer categoryNamePtr,
+                                             DataframeArrayPointer mappingDataframePtr,
+                                             int strict,
+                                             ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                // below zero the study said nothing and the configuration decides
+                supplier.setStrict(strict < 0 ? null : strict > 0);
+                addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
+                        PythonDynamicModelsSupplier.Mode.KEEP_LAST);
+
+            }
+        });
+    }
+
     @CEntryPoint(name = "addDynamicMappings")
     public static void addDynamicMappings(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                           CCharPointer categoryNamePtr,
@@ -164,15 +312,26 @@ public final class DynamicSimulationCFunctions {
         doCatch(exceptionHandlerPtr, new Runnable() {
             @Override
             public void run() {
-                String categoryName = CTypeUtil.toString(categoryNamePtr);
-                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
-                List<UpdatingDataframe> mappingDataframes = new ArrayList<>();
-                for (int i = 0; i < mappingDataframePtr.getDataframesCount(); i++) {
-                    mappingDataframes.add(createDataframe(mappingDataframePtr.getDataframes().addressOf(i)));
-                }
-                DynamicMappingHandler.addElements(categoryName, dynamicMapping, mappingDataframes);
+                addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
+                        PythonDynamicModelsSupplier.Mode.KEEP_FIRST);
             }
         });
+    }
+
+    private static void addMappings(ObjectHandle dynamicMappingHandle, CCharPointer categoryNamePtr,
+                                    DataframeArrayPointer mappingDataframePtr, PythonDynamicModelsSupplier.Mode mode) {
+        String categoryName = CTypeUtil.toString(categoryNamePtr);
+        PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+        List<UpdatingDataframe> mappingDataframes = new ArrayList<>();
+        for (int i = 0; i < mappingDataframePtr.getDataframesCount(); i++) {
+            mappingDataframes.add(createDataframe(mappingDataframePtr.getDataframes().addressOf(i)));
+        }
+        dynamicMapping.setDefaultMode(mode);
+        try {
+            DynamicMappingHandler.addElements(categoryName, dynamicMapping, mappingDataframes);
+        } finally {
+            dynamicMapping.setDefaultMode(PythonDynamicModelsSupplier.Mode.KEEP_FIRST);
+        }
     }
 
     @CEntryPoint(name = "getDynamicMappingsMetaData")

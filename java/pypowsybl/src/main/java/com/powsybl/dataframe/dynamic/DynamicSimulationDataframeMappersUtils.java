@@ -13,6 +13,11 @@ import com.powsybl.dataframe.dynamic.adders.DynamicMappingAdder;
 import com.powsybl.dataframe.dynamic.adders.EventMappingAdder;
 import com.powsybl.dynamicsimulation.TimelineEvent;
 import com.powsybl.dynawo.builders.ModelInfo;
+import com.powsybl.dynawo.models.BlackBoxModel;
+import com.powsybl.dynawo.parameters.Parameter;
+import com.powsybl.dynawo.parameters.ParametersSet;
+import com.powsybl.python.dynamic.ParameterCompletion;
+import com.powsybl.python.dynamic.PythonDynamicModelsSupplier;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Collection;
@@ -58,6 +63,53 @@ public final class DynamicSimulationDataframeMappersUtils {
                 .stringsIndex(NAMED_INDEX_NAME, CategoryInformation::name)
                 .strings(DESCRIPTION_NAME, CategoryInformation::description)
                 .strings("attribute", CategoryInformation::attribute)
+                .build();
+    }
+
+    /**
+     * What a mapping made of a network: the model standing for each equipment and the parameter
+     * set valuing it, which is what one looks at to check a mapping did what was meant.
+     */
+    public static DataframeMapper<Collection<BlackBoxModel>, Void> mappedModelsDataFrameMapper() {
+        return new DataframeMapperBuilder<Collection<BlackBoxModel>, BlackBoxModel, Void>()
+                .itemsStreamProvider(Collection::stream)
+                .stringsIndex("dynamic_model_id", BlackBoxModel::getDynamicModelId)
+                .strings("static_id", m -> PythonDynamicModelsSupplier.describedEquipment(m).orElse(""))
+                .strings("model", BlackBoxModel::getLib)
+                .strings("parameter_set_id", BlackBoxModel::getParameterSetId)
+                .build();
+    }
+
+    /**
+     * The parameters a mapping generated, one row per parameter of each set. The ones read from the
+     * network are left out: they hold no value to look at or change, only the name of what they
+     * follow.
+     */
+    public static DataframeMapper<Collection<ParametersSet>, Void> mappedParametersDataFrameMapper() {
+        return new DataframeMapperBuilder<Collection<ParametersSet>, Pair<String, Parameter>, Void>()
+                .itemsStreamProvider(sets -> sets.stream()
+                        .flatMap(set -> set.getParameters().values().stream().map(p -> Pair.of(set.getId(), p))))
+                .stringsIndex("parameter_set_id", Pair::getKey)
+                .strings("name", p -> p.getValue().name())
+                .strings("type", p -> p.getValue().type().name())
+                .strings("value", p -> p.getValue().value())
+                .build();
+    }
+
+    /**
+     * What had to be added for the models given to equipments after their parameters were written,
+     * one row per parameter, so that a study reads what a run would use before running it.
+     */
+    public static DataframeMapper<Collection<ParameterCompletion>, Void> parameterCompletionsDataFrameMapper() {
+        return new DataframeMapperBuilder<Collection<ParameterCompletion>, Pair<ParameterCompletion, Parameter>, Void>()
+                .itemsStreamProvider(completions -> completions.stream()
+                        .flatMap(c -> c.added().stream().map(p -> Pair.of(c, p))))
+                .stringsIndex("static_id", p -> p.getKey().equipment())
+                .strings("model", p -> p.getKey().model())
+                .strings("source_parameter_set_id", p -> p.getKey().sourceId())
+                .strings("parameter_set_id", p -> p.getKey().completedId())
+                .strings("name", p -> p.getValue().name())
+                .strings("value", p -> p.getValue().value())
                 .build();
     }
 

@@ -154,6 +154,11 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
     pypowsybl::addDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
 }
 
+void updateDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::string category_name, const std::vector<dataframe*>& dataframes, int strict) {
+    std::shared_ptr<dataframe_array> dataframeArray = ::createDataframeArray(dataframes);
+    pypowsybl::updateDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get(), strict);
+}
+
 template<typename T>
 py::array seriesAsNumpyArray(const series& series) {
 	//Last argument is to bind lifetime of series to the returned array
@@ -203,6 +208,8 @@ void dynamicSimulationBindings(py::module_& m) {
     //entrypoints for constructors
     m.def("create_dynamic_simulation_context", &pypowsybl::createDynamicSimulationContext);
     m.def("create_dynamic_model_mapping", &pypowsybl::createDynamicModelMapping);
+    m.def("apply_model_mapping", &pypowsybl::applyModelMapping, py::arg("dynamic_mapping_handle"),
+          py::arg("network_handle"), py::arg("mapping_name"));
     m.def("create_timeseries_mapping", &pypowsybl::createTimeseriesMapping);
     m.def("create_event_mapping", &pypowsybl::createEventMapping);
 
@@ -212,6 +219,13 @@ void dynamicSimulationBindings(py::module_& m) {
 
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));
+    m.def("update_all_dynamic_mappings", ::updateDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"), py::arg("strict"));
+    m.def("get_mapped_models", &pypowsybl::getMappedModels, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
+    m.def("get_mapped_parameters", &pypowsybl::getMappedParameters, py::arg("dynamic_mapping_handle"));
+    m.def("get_parameter_completions", &pypowsybl::getParameterCompletions, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
+    m.def("update_mapped_parameter", &pypowsybl::updateMappedParameter, py::arg("dynamic_mapping_handle"),
+          py::arg("parameter_set_id"), py::arg("parameter_name"), py::arg("value"));
+    m.def("load_mapped_parameters", &pypowsybl::loadMappedParameters, py::arg("dynamic_mapping_handle"), py::arg("parameters_file"));
     m.def("get_dynamic_mappings_meta_data", &pypowsybl::getDynamicMappingsMetaData, py::arg("category_name"));
     m.def("get_categories", &pypowsybl::getCategories);
     m.def("get_categories_information", &pypowsybl::getCategoriesInformation);

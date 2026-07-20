@@ -4,11 +4,17 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from numpy.typing import ArrayLike
 from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
+from pypowsybl.network import Network
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
+
+
+def _to_parameter_value(value: Any) -> str:
+    """Dynawo writes every parameter as text, booleans in lower case."""
+    return str(value).lower() if isinstance(value, bool) else str(value)
 
 
 class ModelMapping:
@@ -18,6 +24,152 @@ class ModelMapping:
 
     def __init__(self) -> None:
         self._handle = _pp.create_dynamic_model_mapping()
+
+    def create_dynawaltz(self, network: Network) -> None:
+        """
+        Describe every synchronous generator of the network for a voltage stability study.
+
+        The controls of each machine are deduced from its characteristics, then simplified, and
+        the parameters the models need are generated along with them, so that the mapping is
+        enough to run a simulation.
+
+        Args:
+            network: the network to describe, which a load flow must have been run on
+        """
+        self.apply('UniversalDynaWaltz', network)
+
+    def create_dynaswing(self, network: Network) -> None:
+        """
+        Describe every synchronous generator of the network for a transient study.
+
+        Same description as :func:`create_dynawaltz`, keeping the detailed controls instead of
+        simplifying them.
+
+        Args:
+            network: the network to describe, which a load flow must have been run on
+        """
+        self.apply('UniversalDynaSwing', network)
+
+    def apply(self, mapping_name: str, network: Network) -> None:
+        """
+        Apply a mapping registered in the java side, adding its models to this mapping.
+
+        Args:
+            mapping_name: name of the mapping, for instance UniversalDynaWaltz or IeeeDynaWaltz
+            network: the network to describe
+        """
+        _pp.apply_model_mapping(self._handle, network._handle, mapping_name)
+
+    def update_dynamic_model(self, category_name: str, df: Optional[Union[DataFrame, List[Optional[DataFrame]]]] = None,
+                             strict: Optional[bool] = None, **kwargs: ArrayLike) -> None:
+        """
+        Describe equipments, replacing the description already in place where there is one.
+
+        Where :func:`add_dynamic_model` keeps the description an equipment already has, this one
+        replaces it, so a mapping can be adjusted a machine at a time instead of being written by
+        hand.
+
+        Saying nothing of the parameters keeps those of the description being replaced, so a model
+        can be changed without naming the set a mapping wrote for it. Naming one uses it as given.
+
+        Args:
+            category_name: dynamic model category
+            df: Attributes as a dataframe.
+            strict: whether a parameter set that does not value the new model is refused rather
+                than completed for it. Leave it out to follow the platform configuration.
+                A mapping is described without a network and applied to one afterwards, so the
+                parameters of a model cannot be looked at here: a refusal is raised when the
+                models are built, by :func:`get_models` or by running the simulation, and names
+                the parameters the set lacks.
+            kwargs: Attributes as keyword arguments.
+
+        Examples:
+            .. code-block:: python
+
+                model_mapping.create_dynawaltz(network)
+                model_mapping.update_dynamic_model(category_name='SynchronousGenerator',
+                                                   static_id='B3-G',
+                                                   parameter_set_id='GEN3',
+                                                   model_name='GeneratorSynchronousFourWindingsGoverPropVRPropInt')
+        """
+        dfs: List[Optional[DataFrame]] = df if isinstance(df, List) else [df]
+        metadata = _pp.get_dynamic_mappings_meta_data(category_name)
+        c_dfs = _get_c_dataframes(dfs, metadata, **kwargs)
+        _pp.update_all_dynamic_mappings(self._handle, category_name, c_dfs,
+                                        -1 if strict is None else int(strict))
+
+    def get_models(self, network: Network) -> DataFrame:
+        """
+        What this mapping makes of the network: the model standing for each equipment and the
+        parameter set valuing it.
+
+        Args:
+            network: the network the models are built against
+
+        Returns:
+            a dataframe indexed by dynamic model id, holding the static id of the equipment, the
+            model and its parameter set
+        """
+        return create_data_frame_from_series_array(
+            _pp.get_mapped_models(self._handle, network._handle))  # pylint: disable=protected-access
+
+    def get_parameters(self) -> DataFrame:
+        """
+        The parameters the models will run with, whether a mapping generated them, they were loaded
+        from a file or the platform configuration declares them.
+
+        The parameters read from the network are left out: they hold no value to look at, only the
+        name of the network quantity they follow.
+
+        Returns:
+            a dataframe indexed by parameter set id, holding the name, type and value of each
+        """
+        return create_data_frame_from_series_array(_pp.get_mapped_parameters(self._handle))
+
+    def update_parameter_value(self, parameter_set_id: str, parameter_name: str, value: Any) -> None:
+        """
+        Change one parameter value, keeping the type the model declares for it.
+
+        Args:
+            parameter_set_id: id of the set holding the parameter, as :func:`get_parameters` gives it
+            parameter_name: name of the parameter
+            value: its new value
+
+        Examples:
+            .. code-block:: python
+
+                model_mapping.create_dynawaltz(network)
+                model_mapping.update_parameter_value('DynaWaltz_B1-G', 'generator_H', 5.4)
+        """
+        _pp.update_mapped_parameter(self._handle, parameter_set_id, parameter_name, _to_parameter_value(value))
+
+    def load_parameters(self, parameters_file: str) -> None:
+        """
+        Take the parameters from a file, instead of or on top of the generated ones.
+
+        Args:
+            parameters_file: path of the parameters file
+        """
+        _pp.load_mapped_parameters(self._handle, parameters_file)
+
+    def get_parameter_completions(self, network: Network) -> DataFrame:
+        """
+        What had to be added for the models given to equipments after their parameters were
+        written, one row per parameter.
+
+        Giving a machine another model leaves its parameters describing the model it had. What the
+        new one asks for on top of them is derived into a set of its own, leaving the one the study
+        holds untouched, and this says what that was before anything is run.
+
+        Args:
+            network: the network the models are built against
+
+        Returns:
+            a dataframe indexed by static id, holding the model, the set the parameters were
+            written in, the set derived from it, and each parameter added with its value
+        """
+        return create_data_frame_from_series_array(
+            _pp.get_parameter_completions(self._handle, network._handle))  # pylint: disable=protected-access
 
     def get_categories_names(self) -> List[str]:
         """
