@@ -23,3 +23,5 @@ from .impl.extensions import (
 )
 from .impl.model_config import ModelConfig
 from .impl.criteria import Criteria
+from .impl.security_analysis import DynamicSecurityAnalysis
+from .impl.security_analysis_parameters import DynamicSecurityAnalysisParameters
