@@ -69,11 +69,18 @@ class ModelMapping:
         replaces it, so a mapping can be adjusted a machine at a time instead of being written by
         hand.
 
+        Saying nothing of the parameters keeps those of the description being replaced, so a model
+        can be changed without naming the set a mapping wrote for it. Naming one uses it as given.
+
         Args:
             category_name: dynamic model category
             df: Attributes as a dataframe.
             strict: whether a parameter set that does not value the new model is refused rather
                 than completed for it. Leave it out to follow the platform configuration.
+                A mapping is described without a network and applied to one afterwards, so the
+                parameters of a model cannot be looked at here: a refusal is raised when the
+                models are built, by :func:`get_models` or by running the simulation, and names
+                the parameters the set lacks.
             kwargs: Attributes as keyword arguments.
 
         Examples:

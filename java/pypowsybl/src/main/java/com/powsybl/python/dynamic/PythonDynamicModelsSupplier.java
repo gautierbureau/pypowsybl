@@ -114,7 +114,7 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
             }
             describedEquipment(model).ifPresentOrElse(equipment -> {
                 if (entry.mode() == Mode.KEEP_LAST) {
-                    describedEquipments.put(equipment, model);
+                    keepTheParametersOfWhatItReplaces(describedEquipments.put(equipment, model), model);
                 } else {
                     describedEquipments.putIfAbsent(equipment, model);
                 }
@@ -125,6 +125,42 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
         completions.clear();
         models.forEach(this::completeParameters);
         return models;
+    }
+
+    /**
+     * Gives a model replacing another the set the one it replaces was valued by, where nothing was
+     * said about parameters.
+     * <p>
+     * Describing an equipment names a set, and one that says nothing is given the equipment to
+     * name it after. That is right for a description standing on its own and wrong for one
+     * replacing another: the mapping wrote a set for the equipment under a name of its own, and
+     * taking the default would quietly leave it behind, so the model would run on nothing while
+     * the set that values it sat unused.
+     * <p>
+     * Only a description that named nothing is given one: a set named outright is left alone, even
+     * where the study does not hold it, since that is something to be told about rather than
+     * quietly overruled.
+     */
+    private void keepTheParametersOfWhatItReplaces(DynamicModel replaced, DynamicModel model) {
+        if (mappingParameters == null
+                || !(replaced instanceof EquipmentBlackBoxModel replacedModel)
+                || !(model instanceof EquipmentBlackBoxModel newModel)
+                || !(model instanceof AbstractBlackBoxModel valuedModel)) {
+            return;
+        }
+        String named = newModel.getParameterSetId();
+        // what a description naming no set is given, which is how one is known to have named none
+        if (!newModel.getEquipment().getId().equals(named) || holdsSet(named)
+                || !holdsSet(replacedModel.getParameterSetId())) {
+            return;
+        }
+        valuedModel.setParameterSetId(replacedModel.getParameterSetId());
+        LOGGER.info("{} says nothing of its parameters, keeping {} which valued the model it replaces",
+                newModel.getEquipment().getId(), replacedModel.getParameterSetId());
+    }
+
+    private boolean holdsSet(String id) {
+        return mappingParameters.getModelParameters().stream().anyMatch(s -> s.getId().equals(id));
     }
 
     /**
