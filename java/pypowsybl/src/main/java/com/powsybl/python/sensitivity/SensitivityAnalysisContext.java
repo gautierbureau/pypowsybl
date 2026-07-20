@@ -330,73 +330,36 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         Map<String, SensitivityVariableSet> variableSetsById = variableSets.stream()
                 .collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
 
-        // Reverse mode needs only an O(functions + variables) factor set, NOT the functions×variables cross
-        // product: one factor per function feeds x̄ (through the cotangent map); one factor per variable
-        // creates its θ̄ group; the self-pair (a variable that is itself a monitored function, e.g. a branch
-        // admittance on its own flow) carries the direct term. This reproduces the full cross product exactly
-        // (validated in OLF AcSensitivityAnalysisAdjointTest#runAdjointMinimalFactorSetMatchesFull*), turning a
-        // ~F·V allocation (millions of factors on a real case) into ~F+V.
-        List<SensitivityFactor> factors = new ArrayList<>();
+        // Reverse mode needs only the monitored functions + the variables, NOT the functions×variables cross
+        // product. Pass them as per-function-type blocks; OpenLoadFlow builds the O(F+V) adjoint factor set
+        // from them (AcSensitivityAnalysis.buildAdjointFactors, gated in AcSensitivityAnalysisAdjointTest),
+        // turning a ~F·V allocation (millions of factors on a real case) into ~F+V.
+        List<AcSensitivityAnalysis.AdjointBlock> blocks = new ArrayList<>();
         Map<String, Double> cotangentByFunctionId = new HashMap<>();
-        Set<String> emittedPairs = new HashSet<>();     // "functionType|resolvedFunctionId|variableId" dedup
-        Set<String> variablesWithGroup = new HashSet<>();
 
         for (MatrixInfo matrix : matrices) {
             List<String> columns = matrix.getColumnIds();
             List<String> rows = matrix.getRowIds();
             SensitivityFunctionType functionType = matrix.getFunctionType();
 
-            // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector
+            // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector.
+            // Key by (functionType, resolvedFunctionId): a branch monitored by several function types (current
+            // and active power) shares one id, so keying by id alone would merge their cotangents. This build
+            // stays caller-side — it depends on the matrix column layout (offsetColumn), which OLF ignores.
             for (int j = 0; j < columns.size(); j++) {
                 String functionId = SensitivityFactor.resolveBusId(columns.get(j), functionType, network);
-                // key by (functionType, functionId): a branch monitored by several function types (current
-                // and active power) shares one id, so keying by id alone would merge their cotangents.
                 cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
                         functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
             }
 
-            // x̄: one factor per function, paired with the first variable (base case only — adjoint ignores contingencies)
-            String v0 = rows.get(0);
-            boolean[] v0Set = new boolean[1];
-            SensitivityVariableType v0Type = resolveAdjointVariableType(network, v0, matrix, variableSetsById, v0Set);
-            for (String functionId : columns) {
-                String rf = SensitivityFactor.resolveBusId(functionId, functionType, network);
-                if (emittedPairs.add(functionType.name() + '|' + rf + '|' + v0)) {
-                    factors.add(new SensitivityFactor(functionType, rf, v0Type, v0, v0Set[0], ContingencyContext.none()));
-                }
-            }
-            variablesWithGroup.add(v0);
-
-            // self-pair (direct term): a variable that is itself a monitored function in this matrix
-            Set<String> rawColumns = new HashSet<>(columns);
+            // variables (rows) of this block, each with its resolved type + set-ness
+            List<AcSensitivityAnalysis.AdjointVariable> variables = new ArrayList<>();
             for (String variableId : rows) {
-                if (rawColumns.contains(variableId)) {
-                    boolean[] vSet = new boolean[1];
-                    SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, matrix, variableSetsById, vSet);
-                    String rf = SensitivityFactor.resolveBusId(variableId, functionType, network);
-                    if (emittedPairs.add(functionType.name() + '|' + rf + '|' + variableId)) {
-                        factors.add(new SensitivityFactor(functionType, rf, vType, variableId, vSet[0], ContingencyContext.none()));
-                    }
-                    variablesWithGroup.add(variableId);
-                }
-            }
-        }
-
-        // group guarantee: every variable needs a θ̄ group. v0 and self-pair variables have one; give the
-        // rest (e.g. shunts, never a monitored function) one factor with a fixed function whose direct term
-        // is 0 for them (safe — see the OLF test). Rows are the same variable set across matrices.
-        MatrixInfo m0 = matrices.get(0);
-        SensitivityFunctionType ft0 = m0.getFunctionType();
-        String f0 = SensitivityFactor.resolveBusId(m0.getColumnIds().get(0), ft0, network);
-        for (String variableId : m0.getRowIds()) {
-            if (!variablesWithGroup.contains(variableId)) {
                 boolean[] vSet = new boolean[1];
-                SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, m0, variableSetsById, vSet);
-                if (emittedPairs.add(ft0.name() + '|' + f0 + '|' + variableId)) {
-                    factors.add(new SensitivityFactor(ft0, f0, vType, variableId, vSet[0], ContingencyContext.none()));
-                }
-                variablesWithGroup.add(variableId);
+                SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, matrix, variableSetsById, vSet);
+                variables.add(new AcSensitivityAnalysis.AdjointVariable(variableId, vType, vSet[0]));
             }
+            blocks.add(new AcSensitivityAnalysis.AdjointBlock(functionType, columns, variables));
         }
 
         SensitivityAnalysisProvider p = SensitivityAnalysisCUtils.getSensitivityAnalysisProvider(provider);
@@ -404,7 +367,7 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             throw new PowsyblException("Adjoint (VJP) sensitivity requires the OpenLoadFlow provider, got '" + p.getName() + "'");
         }
         Map<String, Double> gradientByVariableId = olfProvider.runAdjoint(network,
-                network.getVariantManager().getWorkingVariantId(), factors, cotangentByFunctionId, variableSets,
+                network.getVariantManager().getWorkingVariantId(), blocks, cotangentByFunctionId, variableSets,
                 sensitivityAnalysisParameters);
 
         return new SensitivityAnalysisAdjointResultContext(factorsMatrix, gradientByVariableId);
