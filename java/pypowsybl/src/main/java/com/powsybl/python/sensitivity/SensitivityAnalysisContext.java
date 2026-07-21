@@ -13,6 +13,7 @@ import com.powsybl.contingency.Contingency;
 import com.powsybl.contingency.ContingencyContext;
 import com.powsybl.contingency.ContingencyContextType;
 import com.powsybl.iidm.network.*;
+import com.powsybl.openloadflow.sensi.AcSensitivityAnalysis;
 import com.powsybl.openloadflow.sensi.OpenSensitivityAnalysisProvider;
 import com.powsybl.python.commons.CommonObjects;
 import com.powsybl.python.contingency.ContingencyContainerImpl;
@@ -152,6 +153,28 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             count += matrix.getColumnCount();
         }
         return count;
+    }
+
+    // Resolve a variable's SensitivityVariableType for the adjoint factor build, mirroring the per-variable
+    // logic the old cross-product loop used inline: the matrix's declared type, else inferred from the
+    // network, else a variable set (INJECTION_ACTIVE_POWER). isVariableSetOut[0] receives the variable-set flag.
+    private SensitivityVariableType resolveAdjointVariableType(Network network, String variableId, MatrixInfo matrix,
+                                                              Map<String, SensitivityVariableSet> variableSetsById,
+                                                              boolean[] isVariableSetOut) {
+        SensitivityVariableType variableType = matrix.getVariableType();
+        isVariableSetOut[0] = false;
+        if (variableType == null) {
+            variableType = getVariableType(network, variableId);
+            if (variableType == null) {
+                if (variableSetsById.containsKey(variableId)) {
+                    isVariableSetOut[0] = true;
+                    variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
+                } else {
+                    throw new PowsyblException("Variable '" + variableId + "' not found");
+                }
+            }
+        }
+        return variableType;
     }
 
     private SensitivityVariableType getVariableType(Network network, String variableId) {
@@ -307,40 +330,36 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
         Map<String, SensitivityVariableSet> variableSetsById = variableSets.stream()
                 .collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
 
-        List<SensitivityFactor> factors = new ArrayList<>();
+        // Reverse mode needs only the monitored functions + the variables, NOT the functions×variables cross
+        // product. Pass them as per-function-type blocks; OpenLoadFlow builds the O(F+V) adjoint factor set
+        // from them (AcSensitivityAnalysis.buildAdjointFactors, gated in AcSensitivityAnalysisAdjointTest),
+        // turning a ~F·V allocation (millions of factors on a real case) into ~F+V.
+        List<AcSensitivityAnalysis.AdjointBlock> blocks = new ArrayList<>();
         Map<String, Double> cotangentByFunctionId = new HashMap<>();
 
         for (MatrixInfo matrix : matrices) {
             List<String> columns = matrix.getColumnIds();
             List<String> rows = matrix.getRowIds();
+            SensitivityFunctionType functionType = matrix.getFunctionType();
 
-            // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector
+            // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector.
+            // Key by (functionType, resolvedFunctionId): a branch monitored by several function types (current
+            // and active power) shares one id, so keying by id alone would merge their cotangents. This build
+            // stays caller-side — it depends on the matrix column layout (offsetColumn), which OLF ignores.
             for (int j = 0; j < columns.size(); j++) {
-                String functionId = SensitivityFactor.resolveBusId(columns.get(j), matrix.getFunctionType(), network);
-                cotangentByFunctionId.merge(functionId, functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
+                String functionId = SensitivityFactor.resolveBusId(columns.get(j), functionType, network);
+                cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
+                        functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
             }
 
-            // (function, variable) factors, base case only (the adjoint ignores contingencies)
+            // variables (rows) of this block, each with its resolved type + set-ness
+            List<AcSensitivityAnalysis.AdjointVariable> variables = new ArrayList<>();
             for (String variableId : rows) {
-                SensitivityVariableType variableType = matrix.getVariableType();
-                boolean variableSet = false;
-                if (variableType == null) {
-                    variableType = getVariableType(network, variableId);
-                    if (variableType == null) {
-                        if (variableSetsById.containsKey(variableId)) {
-                            variableSet = true;
-                            variableType = SensitivityVariableType.INJECTION_ACTIVE_POWER;
-                        } else {
-                            throw new PowsyblException("Variable '" + variableId + "' not found");
-                        }
-                    }
-                }
-                for (String functionId : columns) {
-                    String finalFunctionId = SensitivityFactor.resolveBusId(functionId, matrix.getFunctionType(), network);
-                    factors.add(new SensitivityFactor(matrix.getFunctionType(), finalFunctionId, variableType, variableId,
-                            variableSet, ContingencyContext.none()));
-                }
+                boolean[] vSet = new boolean[1];
+                SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, matrix, variableSetsById, vSet);
+                variables.add(new AcSensitivityAnalysis.AdjointVariable(variableId, vType, vSet[0]));
             }
+            blocks.add(new AcSensitivityAnalysis.AdjointBlock(functionType, columns, variables));
         }
 
         SensitivityAnalysisProvider p = SensitivityAnalysisCUtils.getSensitivityAnalysisProvider(provider);
@@ -348,7 +367,7 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             throw new PowsyblException("Adjoint (VJP) sensitivity requires the OpenLoadFlow provider, got '" + p.getName() + "'");
         }
         Map<String, Double> gradientByVariableId = olfProvider.runAdjoint(network,
-                network.getVariantManager().getWorkingVariantId(), factors, cotangentByFunctionId, variableSets,
+                network.getVariantManager().getWorkingVariantId(), blocks, cotangentByFunctionId, variableSets,
                 sensitivityAnalysisParameters);
 
         return new SensitivityAnalysisAdjointResultContext(factorsMatrix, gradientByVariableId);
