@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike
 from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
 from pypowsybl.network import Network
+from pypowsybl.report import ReportNode
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 
 
@@ -25,7 +26,7 @@ class ModelMapping:
     def __init__(self) -> None:
         self._handle = _pp.create_dynamic_model_mapping()
 
-    def create_dynawaltz(self, network: Network) -> None:
+    def create_dynawaltz(self, network: Network, report_node: Optional[ReportNode] = None) -> None:
         """
         Describe every synchronous generator of the network for a voltage stability study.
 
@@ -35,10 +36,12 @@ class ModelMapping:
 
         Args:
             network: the network to describe, which a load flow must have been run on
+            report_node: where the model each equipment was given is reported, along with what it
+                         asked for and did not get
         """
-        self.apply('UniversalDynaWaltz', network)
+        self.apply('UniversalDynaWaltz', network, report_node)
 
-    def create_dynaswing(self, network: Network) -> None:
+    def create_dynaswing(self, network: Network, report_node: Optional[ReportNode] = None) -> None:
         """
         Describe every synchronous generator of the network for a transient study.
 
@@ -47,18 +50,22 @@ class ModelMapping:
 
         Args:
             network: the network to describe, which a load flow must have been run on
+            report_node: where the model each equipment was given is reported, along with what it
+                         asked for and did not get
         """
-        self.apply('UniversalDynaSwing', network)
+        self.apply('UniversalDynaSwing', network, report_node)
 
-    def apply(self, mapping_name: str, network: Network) -> None:
+    def apply(self, mapping_name: str, network: Network, report_node: Optional[ReportNode] = None) -> None:
         """
         Apply a mapping registered in the java side, adding its models to this mapping.
 
         Args:
             mapping_name: name of the mapping, for instance UniversalDynaWaltz or IeeeDynaWaltz
             network: the network to describe
+            report_node: where what the mapping made of each equipment is reported
         """
-        _pp.apply_model_mapping(self._handle, network._handle, mapping_name)
+        _pp.apply_model_mapping(self._handle, network._handle, mapping_name,
+                                None if report_node is None else report_node._report_node)  # pylint: disable=protected-access
 
     def update_dynamic_model(self, category_name: str, df: Optional[Union[DataFrame, List[Optional[DataFrame]]]] = None,
                              strict: Optional[bool] = None, **kwargs: ArrayLike) -> None:

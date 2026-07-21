@@ -1832,8 +1832,9 @@ void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string category
     PowsyblCaller::get()->callJava<>(::updateDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes, strict);
 }
 
-void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName) {
-    PowsyblCaller::get()->callJava<>(::applyModelMapping, dynamicMappingHandle, networkHandle, (char*) mappingName.c_str());
+void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName, JavaHandle* reportNode) {
+    PowsyblCaller::get()->callJava<>(::applyModelMapping, dynamicMappingHandle, networkHandle, (char*) mappingName.c_str(),
+                                    (reportNode == nullptr) ? nullptr : (void*) *reportNode);
 }
 
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {

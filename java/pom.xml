@@ -77,6 +77,19 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- pulled in transitively, and left behind at the version powsybl-dependencies
+                 declares unless named here, which mixes an older commons into the build the rest
+                 of dynawo comes from -->
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-commons</artifactId>
+                <version>${powsybl-dynawo.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-contingencies</artifactId>
+                <version>${powsybl-dynawo.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.powsybl</groupId>
                 <artifactId>powsybl-dynawo-simulation</artifactId>

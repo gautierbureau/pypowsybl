@@ -96,6 +96,7 @@ public final class DynamicSimulationCFunctions {
     @CEntryPoint(name = "applyModelMapping")
     public static void applyModelMapping(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                          ObjectHandle networkHandle, CCharPointer mappingNamePtr,
+                                         ObjectHandle reportNodeHandle,
                                          ExceptionHandlerPointer exceptionHandlerPtr) {
         // an explicit class rather than a lambda: the handles and the pointer are word values,
         // which a lambda cannot capture
@@ -106,12 +107,20 @@ public final class DynamicSimulationCFunctions {
                 Network network = ObjectHandles.getGlobal().get(networkHandle);
                 String mappingName = CTypeUtil.toString(mappingNamePtr);
 
+                // what each equipment was given, and what it asked for and did not get, which is
+                // the only way anyone outside java gets to see why a machine lost a capability
+                ReportNode reportNode = ReportCUtils.getReportNode(reportNodeHandle);
+                if (reportNode == null) {
+                    reportNode = ReportNode.NO_OP;
+                }
+
                 DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
                 Path homeDir = DynawoSimulationConfig.load().getHomeDir();
                 DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
-                        .apply(mappingName, network, dynawoParameters, ModelDescriptionLookup.fromModelDatabase(homeDir));
+                        .apply(mappingName, network, dynawoParameters,
+                                ModelDescriptionLookup.fromModelDatabase(homeDir), reportNode);
                 // the models are built here, against this network, and handed over one by one
-                models.get(network, ReportNode.NO_OP).forEach(model -> supplier.addModel((n, r) -> model));
+                models.get(network, reportNode).forEach(model -> supplier.addModel((n, r) -> model));
                 supplier.setMappingParameters(dynawoParameters);
                 supplier.setDescriptions(ModelDescriptionLookup.fromModelDatabase(homeDir));
             }

@@ -993,7 +993,7 @@ NadParameters* createNadParameters();
 JavaHandle createDynamicSimulationContext();
 JavaHandle createDynamicModelMapping();
 
-void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName);
+void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName, JavaHandle* reportNode);
 
 SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
 
