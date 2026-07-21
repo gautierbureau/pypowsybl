@@ -46,7 +46,15 @@ public class SensitivityAnalysisAdjointResultContext {
         List<String> rows = m.getRowIds();
         double[] values = new double[rows.size()];
         for (int i = 0; i < rows.size(); i++) {
-            values[i] = gradientByVariableId.getOrDefault(rows.get(i), 0.0);
+            // NaN, never 0.0, for a variable ABSENT from θ̄. Absent and zero are different answers, and
+            // only one of them is an answer: OpenLoadFlow keys θ̄ off the factor groups, so a variable
+            // whose element did not resolve in the solved network (a disconnected shunt, a line open at
+            // either end, a pilot bus outside the solved component) has NO entry, whereas 0.0 is the
+            // honest "this lever cannot move the monitored functions". Substituting 0.0 here made the
+            // two indistinguishable, so a caller that trusts the value silently stops using those levers
+            // and nothing downstream can tell why. NaN propagates and reads as NA in pandas, leaving the
+            // caller to fill, warn or fail knowingly.
+            values[i] = gradientByVariableId.getOrDefault(rows.get(i), Double.NaN);
         }
         return doubleArrToMatrix(values, rows.size(), 1);
     }
