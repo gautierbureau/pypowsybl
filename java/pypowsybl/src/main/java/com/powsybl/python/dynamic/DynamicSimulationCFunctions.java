@@ -48,6 +48,7 @@ import com.powsybl.dynamicsimulation.EventModelsSupplier;
 import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationConfig;
 import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.dynawo.builders.ModelConfigsHandler;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.commons.PowsyblException;
 import com.powsybl.dynawo.models.BlackBoxModel;
@@ -119,6 +120,18 @@ public final class DynamicSimulationCFunctions {
                 DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
                         .apply(mappingName, network, dynawoParameters,
                                 ModelDescriptionLookup.fromModelDatabase(homeDir), reportNode);
+                // a model the mapping built exists nowhere but in those parameters, and standing
+                // one up is done through the catalog, so the catalog is told about it first. A
+                // simulation does this in DynawoSimulationProvider before it reads its models;
+                // here the models are read as soon as the mapping is applied, so it is done here
+                // too, or every built model is answered with "no builder found" and the machine
+                // it was built for goes unmodelled
+                if (!dynawoParameters.getAdditionalModelOverrides().isEmpty()) {
+                    ModelConfigsHandler.getInstance().overrideModels(dynawoParameters.getAdditionalModelOverrides());
+                }
+                if (!dynawoParameters.getAdditionalModels().isEmpty()) {
+                    ModelConfigsHandler.getInstance().addModels(dynawoParameters.getAdditionalModels());
+                }
                 // the models are built here, against this network, and handed over one by one
                 models.get(network, reportNode).forEach(model -> supplier.addModel((n, r) -> model));
                 supplier.setMappingParameters(dynawoParameters);
