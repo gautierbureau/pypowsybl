@@ -10,9 +10,14 @@ package com.powsybl.python.dynamic;
 import com.powsybl.commons.report.ReportNode;
 import com.powsybl.dynamicsimulation.DynamicModel;
 import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
+import com.powsybl.dynawo.DynawoSimulationConfig;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.commons.PowsyblException;
+import com.powsybl.dynawo.builders.ModelConfigsHandler;
+import com.powsybl.dynawo.mappings.DynamicModelsMapping;
+import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.dynawo.mappings.MappingConfig;
+import com.powsybl.dynawo.mappings.MappingParameters;
 import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
 import com.powsybl.dynawo.mappings.parameters.ParametersSetCompleter;
 import com.powsybl.dynawo.desc.ModelDescription;
@@ -25,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.powsybl.iidm.network.Network;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +66,23 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
     }
 
     private final List<Entry> entries = new ArrayList<>();
+
+    /**
+     * A mapping named to be applied later: chosen by name and settled with its settings, but not
+     * against a network yet. It becomes models when {@link #get(Network, ReportNode)} is first
+     * asked, which is where the network it needs comes.
+     */
+    private record Recipe(String name, MappingParameters parameters) {
+    }
+
+    private final List<Recipe> recipes = new ArrayList<>();
+
+    /**
+     * Whether the recipes have been turned into models yet. They are turned once: the models are
+     * added as they resolve, so a second turn would stand up every one of them again and register
+     * what it built into the catalog twice.
+     */
+    private boolean recipesResolved;
 
     /**
      * Settings a mapping generated along with its models, the parameters of each model among them.
@@ -102,8 +125,67 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
         return strict != null ? strict : MappingConfig.load().isStrict();
     }
 
+    /**
+     * Names a mapping to be applied to whatever network the models are later asked for, with the
+     * settings it takes but no network of its own. This is how a mapping is added the lazy way the
+     * dataframe adders already are: the network comes at {@link #get(Network, ReportNode)}.
+     */
+    public void addMappingRecipe(String name, MappingParameters parameters) {
+        recipes.add(new Recipe(name, parameters));
+    }
+
+    /**
+     * Turns every recipe into models, once, against the network they are wanted for.
+     * <p>
+     * A recipe carries no network, so here is where its extensions are created, its models
+     * resolved and built, and the sets it writes gathered into the settings a run reads. What it
+     * built exists only in those settings and is stood up through the catalog, so the catalog is
+     * told about it before the models are read, the ordering a native image forced on us once and
+     * is kept here too.
+     */
+    private void resolveRecipes(Network network, ReportNode reportNode) {
+        if (recipesResolved || recipes.isEmpty()) {
+            return;
+        }
+        recipesResolved = true;
+        Path homeDir = DynawoSimulationConfig.load().getHomeDir();
+        ModelDescriptionLookup installed = ModelDescriptionLookup.fromModelDatabase(homeDir);
+        // the settings the recipes fill in, the study's own if it already had some so a mapping
+        // composes with parameters loaded or set by hand, a fresh set otherwise
+        DynawoSimulationParameters recipeParameters = getMappingParameters().orElseGet(() -> {
+            DynawoSimulationParameters fresh = new DynawoSimulationParameters();
+            setMappingParameters(fresh);
+            return fresh;
+        });
+        for (Recipe recipe : recipes) {
+            DynamicModelsMapping mapping = DynamicModelsMappings.getInstance()
+                    .create(recipe.name(), recipe.parameters());
+            DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
+                    .apply(mapping, network, recipeParameters, installed, reportNode);
+            registerBuiltModels(recipeParameters);
+            models.get(network, reportNode).forEach(model -> addModel((n, r) -> model, Mode.KEEP_FIRST));
+        }
+        if (descriptions == null) {
+            descriptions = installed;
+        }
+    }
+
+    /**
+     * Tells the catalog about the models a mapping built, so they can be stood up rather than
+     * passed over for want of a builder. Applying the mapping is what fills these in.
+     */
+    private static void registerBuiltModels(DynawoSimulationParameters parameters) {
+        if (!parameters.getAdditionalModelOverrides().isEmpty()) {
+            ModelConfigsHandler.getInstance().overrideModels(parameters.getAdditionalModelOverrides());
+        }
+        if (!parameters.getAdditionalModels().isEmpty()) {
+            ModelConfigsHandler.getInstance().addModels(parameters.getAdditionalModels());
+        }
+    }
+
     @Override
     public List<DynamicModel> get(Network network, ReportNode reportNode) {
+        resolveRecipes(network, reportNode);
         ReportNode supplierReportNode = SupplierReport.createDynawoModelsSupplierReportNode(reportNode);
         Map<String, DynamicModel> describedEquipments = new LinkedHashMap<>();
         List<DynamicModel> others = new ArrayList<>();

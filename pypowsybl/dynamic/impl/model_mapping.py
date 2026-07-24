@@ -9,7 +9,6 @@ from numpy.typing import ArrayLike
 from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
 from pypowsybl.network import Network
-from pypowsybl.report import ReportNode
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 
 
@@ -26,46 +25,45 @@ class ModelMapping:
     def __init__(self) -> None:
         self._handle = _pp.create_dynamic_model_mapping()
 
-    def create_dynawaltz(self, network: Network, report_node: Optional[ReportNode] = None) -> None:
+    def create_mapping(self, mapping_name: str, **settings: Any) -> None:
         """
-        Describe every synchronous generator of the network for a voltage stability study.
+        Add a mapping registered on the java side, chosen by name and settled with its settings.
 
-        The controls of each machine are deduced from its characteristics, then simplified, and
-        the parameters the models need are generated along with them, so that the mapping is
-        enough to run a simulation.
+        The mapping is not applied here: no network is named, so nothing is resolved yet. It is a
+        recipe, applied to whatever network the models are later asked for, when the simulation is
+        run or :func:`get_models` is called. This is what keeps a mapping describable without a
+        network in hand, the way the ``add_*`` methods already are.
+
+        The available mappings and what each is for are given by :func:`get_available_mappings`.
 
         Args:
-            network: the network to describe, which a load flow must have been run on
-            report_node: where the model each equipment was given is reported, along with what it
-                         asked for and did not get
-        """
-        self.apply('UniversalDynaWaltz', network, report_node)
+            mapping_name: name of a registered mapping, for instance ``UniversalDynaWaltz`` or
+                          ``IeeeDynaSwing``
+            settings: the settings the mapping takes, for instance ``tso_voltage_min=63`` to set
+                      the voltage below which a machine is taken to sit behind a transformer. A
+                      setting the mapping does not know is refused when the mapping is applied.
 
-    def create_dynaswing(self, network: Network, report_node: Optional[ReportNode] = None) -> None:
-        """
-        Describe every synchronous generator of the network for a transient study.
+        Examples:
+            .. code-block:: python
 
-        Same description as :func:`create_dynawaltz`, keeping the detailed controls instead of
-        simplifying them.
-
-        Args:
-            network: the network to describe, which a load flow must have been run on
-            report_node: where the model each equipment was given is reported, along with what it
-                         asked for and did not get
+                model_mapping.create_mapping('UniversalDynaWaltz', tso_voltage_min=63)
         """
-        self.apply('UniversalDynaSwing', network, report_node)
+        _pp.add_mapping_recipe(self._handle, mapping_name,
+                               {name: _to_parameter_value(value) for name, value in settings.items()})
 
-    def apply(self, mapping_name: str, network: Network, report_node: Optional[ReportNode] = None) -> None:
+    @staticmethod
+    def get_available_mappings() -> DataFrame:
         """
-        Apply a mapping registered in the java side, adding its models to this mapping.
+        The mappings that can be given to :func:`create_mapping`, each with the one line it is for.
 
-        Args:
-            mapping_name: name of the mapping, for instance UniversalDynaWaltz or IeeeDynaWaltz
-            network: the network to describe
-            report_node: where what the mapping made of each equipment is reported
+        Returns:
+            a dataframe indexed by mapping name, holding its description
         """
-        _pp.apply_model_mapping(self._handle, network._handle, mapping_name,
-                                None if report_node is None else report_node._report_node)  # pylint: disable=protected-access
+        rows = [line.split('\t', 1) for line in _pp.get_dynamic_mapping_providers()]
+        return DataFrame.from_records(
+            index='name',
+            columns=['name', 'description'],
+            data=[(name, description) for name, description in rows])
 
     def update_dynamic_model(self, category_name: str, df: Optional[Union[DataFrame, List[Optional[DataFrame]]]] = None,
                              strict: Optional[bool] = None, **kwargs: ArrayLike) -> None:
@@ -93,7 +91,7 @@ class ModelMapping:
         Examples:
             .. code-block:: python
 
-                model_mapping.create_dynawaltz(network)
+                model_mapping.create_mapping('UniversalDynaWaltz')
                 model_mapping.update_dynamic_model(category_name='SynchronousGenerator',
                                                    static_id='B3-G',
                                                    parameter_set_id='GEN3',
@@ -145,7 +143,7 @@ class ModelMapping:
         Examples:
             .. code-block:: python
 
-                model_mapping.create_dynawaltz(network)
+                model_mapping.create_mapping('UniversalDynaWaltz')
                 model_mapping.update_parameter_value('DynaWaltz_B1-G', 'generator_H', 5.4)
         """
         _pp.update_mapped_parameter(self._handle, parameter_set_id, parameter_name, _to_parameter_value(value))

@@ -1832,9 +1832,25 @@ void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string category
     PowsyblCaller::get()->callJava<>(::updateDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes, strict);
 }
 
-void applyModelMapping(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, std::string mappingName, JavaHandle* reportNode) {
-    PowsyblCaller::get()->callJava<>(::applyModelMapping, dynamicMappingHandle, networkHandle, (char*) mappingName.c_str(),
-                                    (reportNode == nullptr) ? nullptr : (void*) *reportNode);
+void addMappingRecipe(JavaHandle dynamicMappingHandle, std::string mappingName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addMappingRecipe, dynamicMappingHandle, (char*) mappingName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getDynamicMappingProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicMappingProviders);
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
 }
 
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {

@@ -45,20 +45,18 @@ import com.powsybl.dynamicsimulation.OutputVariablesSupplier;
 import com.powsybl.dynamicsimulation.DynamicSimulationParameters;
 import com.powsybl.dynamicsimulation.DynamicSimulationResult;
 import com.powsybl.dynamicsimulation.EventModelsSupplier;
-import com.powsybl.dynamicsimulation.DynamicModelsSupplier;
-import com.powsybl.dynawo.DynawoSimulationConfig;
 import com.powsybl.dynawo.DynawoSimulationParameters;
-import com.powsybl.dynawo.builders.ModelConfigsHandler;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
+import com.powsybl.dynawo.mappings.MappingParameters;
 import com.powsybl.commons.PowsyblException;
 import com.powsybl.dynawo.models.BlackBoxModel;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
-import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
 import com.powsybl.iidm.network.Network;
 
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Map;
 import com.powsybl.python.commons.CTypeUtil;
 import com.powsybl.python.commons.Directives;
 import com.powsybl.python.commons.PyPowsyblApiHeader.ArrayPointer;
@@ -94,50 +92,38 @@ public final class DynamicSimulationCFunctions {
         return doCatch(exceptionHandlerPtr, () -> ObjectHandles.getGlobal().create(new PythonDynamicModelsSupplier()));
     }
 
-    @CEntryPoint(name = "applyModelMapping")
-    public static void applyModelMapping(IsolateThread thread, ObjectHandle dynamicMappingHandle,
-                                         ObjectHandle networkHandle, CCharPointer mappingNamePtr,
-                                         ObjectHandle reportNodeHandle,
-                                         ExceptionHandlerPointer exceptionHandlerPtr) {
-        // an explicit class rather than a lambda: the handles and the pointer are word values,
+    @CEntryPoint(name = "addMappingRecipe")
+    public static void addMappingRecipe(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                        CCharPointer mappingNamePtr,
+                                        CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                        CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                        ExceptionHandlerPointer exceptionHandlerPtr) {
+        // an explicit class rather than a lambda: the handles and the pointers are word values,
         // which a lambda cannot capture
         doCatch(exceptionHandlerPtr, new Runnable() {
             @Override
             public void run() {
                 PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
-                Network network = ObjectHandles.getGlobal().get(networkHandle);
                 String mappingName = CTypeUtil.toString(mappingNamePtr);
-
-                // what each equipment was given, and what it asked for and did not get, which is
-                // the only way anyone outside java gets to see why a machine lost a capability
-                ReportNode reportNode = ReportCUtils.getReportNode(reportNodeHandle);
-                if (reportNode == null) {
-                    reportNode = ReportNode.NO_OP;
-                }
-
-                DynawoSimulationParameters dynawoParameters = new DynawoSimulationParameters();
-                Path homeDir = DynawoSimulationConfig.load().getHomeDir();
-                DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
-                        .apply(mappingName, network, dynawoParameters,
-                                ModelDescriptionLookup.fromModelDatabase(homeDir), reportNode);
-                // a model the mapping built exists nowhere but in those parameters, and standing
-                // one up is done through the catalog, so the catalog is told about it first. A
-                // simulation does this in DynawoSimulationProvider before it reads its models;
-                // here the models are read as soon as the mapping is applied, so it is done here
-                // too, or every built model is answered with "no builder found" and the machine
-                // it was built for goes unmodelled
-                if (!dynawoParameters.getAdditionalModelOverrides().isEmpty()) {
-                    ModelConfigsHandler.getInstance().overrideModels(dynawoParameters.getAdditionalModelOverrides());
-                }
-                if (!dynawoParameters.getAdditionalModels().isEmpty()) {
-                    ModelConfigsHandler.getInstance().addModels(dynawoParameters.getAdditionalModels());
-                }
-                // the models are built here, against this network, and handed over one by one
-                models.get(network, reportNode).forEach(model -> supplier.addModel((n, r) -> model));
-                supplier.setMappingParameters(dynawoParameters);
-                supplier.setDescriptions(ModelDescriptionLookup.fromModelDatabase(homeDir));
+                // a recipe carries no network: it is the name of a registered mapping and the
+                // settings it takes, applied later against whatever network the models are asked
+                // for, so a mapping is named the same lazy way the dataframe adders already are
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                supplier.addMappingRecipe(mappingName, MappingParameters.of(settings));
             }
         });
+    }
+
+    @CEntryPoint(name = "getDynamicMappingProviders")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        // one line per registered mapping, its name and its description tab apart, which is all
+        // that has to cross for a caller to see what it can be given and choose one
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicModelsMappings.getInstance().getMappingInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
     }
 
     @CEntryPoint(name = "getMappedModels")
