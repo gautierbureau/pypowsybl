@@ -135,6 +135,11 @@ class ModelMapping:
         """
         Change one parameter value, keeping the type the model declares for it.
 
+        A set loaded from a file or added by hand is changed at once. A set a mapping generates is
+        written only once the mapping is applied to a network, so a value changed before that is
+        held and applied when the mapping resolves, at :func:`get_models` or when the simulation is
+        run. Either way the change is in place by the time the models are built.
+
         Args:
             parameter_set_id: id of the set holding the parameter, as :func:`get_parameters` gives it
             parameter_name: name of the parameter

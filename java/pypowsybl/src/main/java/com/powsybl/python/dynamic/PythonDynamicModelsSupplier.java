@@ -85,6 +85,16 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
     private boolean recipesResolved;
 
     /**
+     * A parameter change waiting for the set it names to exist. A recipe writes its sets only once
+     * it is applied to a network, so a value changed before that is held here and applied when the
+     * recipe resolves, rather than refused on a set that is not written yet.
+     */
+    private record PendingParameterUpdate(String setId, String name, String value) {
+    }
+
+    private final List<PendingParameterUpdate> pendingParameterUpdates = new ArrayList<>();
+
+    /**
      * Settings a mapping generated along with its models, the parameters of each model among them.
      * They travel with the models because they describe them: a set is written for one model of one
      * equipment and means nothing without it.
@@ -168,6 +178,47 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
         if (descriptions == null) {
             descriptions = installed;
         }
+        // the sets exist now, so a change made against one before the recipe was applied lands
+        applyPendingParameterUpdates();
+    }
+
+    /**
+     * Changes one value in a set, or holds the change until the set exists.
+     * <p>
+     * A set is there to change once a mapping is applied or loaded from a file, and then the value
+     * is changed at once. A set a recipe writes is not there until the recipe is applied to a
+     * network, so a change named before that is held and made when it resolves, rather than
+     * refused on a set that does not exist yet. A change naming a set nothing will ever write is
+     * refused where that is settled: at once where no recipe is waiting to write it, at resolution
+     * where one was and still did not.
+     */
+    public void updateParameterValue(String setId, String name, String value) {
+        ParametersSet set = getOrCreateMappingParameters().getModelParameters().stream()
+                .filter(s -> s.getId().equals(setId))
+                .findFirst()
+                .orElse(null);
+        if (set != null) {
+            applyParameterValue(set, name, value);
+        } else if (!recipesResolved && !recipes.isEmpty()) {
+            pendingParameterUpdates.add(new PendingParameterUpdate(setId, name, value));
+        } else {
+            throw new PowsyblException("Model parameter set " + setId + " not found");
+        }
+    }
+
+    private static void applyParameterValue(ParametersSet set, String name, String value) {
+        Parameter parameter = set.getParameters().get(name);
+        if (parameter == null) {
+            throw new PowsyblException("Parameter " + name + " not found in set " + set.getId());
+        }
+        // the type is the one the model declares, only the value is the study's to choose
+        set.replaceParameter(name, parameter.type(), value);
+    }
+
+    private void applyPendingParameterUpdates() {
+        List<PendingParameterUpdate> pending = List.copyOf(pendingParameterUpdates);
+        pendingParameterUpdates.clear();
+        pending.forEach(update -> updateParameterValue(update.setId(), update.name(), update.value()));
     }
 
     /**

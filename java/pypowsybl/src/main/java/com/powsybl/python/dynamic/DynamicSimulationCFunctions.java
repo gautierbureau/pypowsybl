@@ -48,7 +48,6 @@ import com.powsybl.dynamicsimulation.EventModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.dynawo.mappings.MappingParameters;
-import com.powsybl.commons.PowsyblException;
 import com.powsybl.dynawo.models.BlackBoxModel;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
@@ -201,14 +200,9 @@ public final class DynamicSimulationCFunctions {
                 String parameterSetId = CTypeUtil.toString(parameterSetIdPtr);
                 String parameterName = CTypeUtil.toString(parameterNamePtr);
                 String value = CTypeUtil.toString(valuePtr);
-                DynawoSimulationParameters parameters = supplier.getOrCreateMappingParameters();
-                ParametersSet set = parameters.getModelParameters(parameterSetId);
-                com.powsybl.dynawo.parameters.Parameter parameter = set.getParameters().get(parameterName);
-                if (parameter == null) {
-                    throw new PowsyblException("Parameter " + parameterName + " not found in set " + parameterSetId);
-                }
-                // the type is the one the model declares, only the value is the study's to choose
-                set.replaceParameter(parameterName, parameter.type(), value);
+                // the change is made now if the set is there, or held until the recipe that writes
+                // it is applied to a network, so a value can be set before the mapping is resolved
+                supplier.updateParameterValue(parameterSetId, parameterName, value);
             }
         });
     }
@@ -278,9 +272,14 @@ public final class DynamicSimulationCFunctions {
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
                 // the models are built first, so that the sets derived for them are known
                 dynamicMapping.get(network, reportNode);
-                dynamicMapping.getMappingParameters().ifPresent(mappingParameters ->
-                        dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class,
-                                dynamicMapping.getRunParameters()));
+                dynamicMapping.getMappingParameters().ifPresent(mappingParameters -> {
+                    DynawoSimulationParameters runParameters = dynamicMapping.getRunParameters();
+                    // detached from a run before it: these settings belong to the mapping and are
+                    // reused, but an extension holds to one extendable, so the same mapping run
+                    // again, a value changed between runs as in a sweep, would fail to attach them
+                    runParameters.setExtendable(null);
+                    dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
+                });
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
