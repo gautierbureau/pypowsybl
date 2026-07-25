@@ -37,14 +37,21 @@ class SensitivityAnalysisResult:
         return '' if contingency_id is None else contingency_id
 
     def process_ptdf(self, df: pd.DataFrame, matrix_id: str) -> pd.DataFrame:
-        # substract second power transfer zone to first one
-        i = 0
-        while i < len(self.function_data_frame_index[matrix_id]):
-            if self.function_data_frame_index[matrix_id][i] == TO_REMOVE:
-                df.iloc[i - 1] = df.iloc[i - 1] - df.iloc[i]
-            i += 1
-        # remove rows corresponding to power transfer second zone
-        return df.drop([TO_REMOVE], errors='ignore')
+        # Rows tagged TO_REMOVE hold the "second zone" of a two-zone power-transfer factor: for
+        # each such row, subtract it from its preceding "a -> b" row, then drop the TO_REMOVE
+        # rows. Vectorized in numpy so the cost is one 2D subtraction on a contiguous ndarray
+        # rather than a per-row df.iloc read/write, which is dominant when there are many zone
+        # transfers.
+        index = self.function_data_frame_index[matrix_id]
+        to_remove_positions = np.fromiter(
+            (i for i, name in enumerate(index) if name == TO_REMOVE), dtype=np.intp,
+        )
+        if to_remove_positions.size == 0:
+            return df
+        prev_positions = to_remove_positions - 1
+        values = df.to_numpy(copy=True)
+        values[prev_positions] -= values[to_remove_positions]
+        return pd.DataFrame(values, index=df.index, columns=df.columns).drop([TO_REMOVE], errors='ignore')
 
     def get_sensitivity_matrix(self, matrix_id: str = DEFAULT_MATRIX_ID, contingency_id:  Optional[str] = None) -> Optional[
         pd.DataFrame]:
