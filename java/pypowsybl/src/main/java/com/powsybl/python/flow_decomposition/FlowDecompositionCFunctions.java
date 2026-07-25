@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static com.powsybl.python.commons.CTypeUtil.toStringList;
@@ -68,6 +69,23 @@ public final class FlowDecompositionCFunctions {
                 Set<String> elementsIds = new HashSet<>(toStringList(elementIdPtrPtr, elementCount));
                 String contingencyId = CTypeUtil.toString(contingencyIdPtr);
                 flowDecompositionContext.getXnecProviderByIdsBuilder().addContingency(contingencyId, elementsIds);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "addSingleElementContingenciesForFlowDecomposition")
+    public static void addSingleElementContingencies(IsolateThread thread, ObjectHandle flowDecompositionContextHandle,
+                                                     CCharPointerPointer contingencyIdPtrPtr, CCharPointerPointer elementIdPtrPtr,
+                                                     int count, PyPowsyblApiHeader.ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                FlowDecompositionContext flowDecompositionContext = ObjectHandles.getGlobal().get(flowDecompositionContextHandle);
+                List<String> contingencyIds = toStringList(contingencyIdPtrPtr, count);
+                List<String> elementIds = toStringList(elementIdPtrPtr, count);
+                for (int i = 0; i < count; i++) {
+                    flowDecompositionContext.getXnecProviderByIdsBuilder().addContingency(contingencyIds.get(i), Set.of(elementIds.get(i)));
+                }
             }
         });
     }

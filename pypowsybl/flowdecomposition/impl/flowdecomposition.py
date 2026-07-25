@@ -53,10 +53,9 @@ class FlowDecomposition:
             element_ids:                List of elements
             contingency_id_provider:    Function to transform an element id to a contingency id. By default, the identity function is used.
         """
-        for element_id in element_ids:
-            self.add_multiple_elements_contingency(elements_ids=[element_id],
-                                                   contingency_id=self.__get_contingency_id(contingency_id_provider,
-                                                                                            element_id))
+        contingency_ids = [self.__get_contingency_id(contingency_id_provider, element_id) for element_id in element_ids]
+        # single native call for all N-1 contingencies instead of one per element
+        _pypowsybl.add_single_element_contingencies_for_flow_decomposition(self._handle, contingency_ids, element_ids)
         return self
 
     def add_multiple_elements_contingency(self, elements_ids: List[str],
