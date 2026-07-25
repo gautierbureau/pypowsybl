@@ -786,7 +786,8 @@ def get_connectables_order_positions(network: Network, voltage_level_id: str) ->
     """
     series_array = _pp.get_connectables_order_positions(network._handle, voltage_level_id)
     position_df = create_data_frame_from_series_array(series_array).sort_values(by=['order_position'])
-    position_df['extension_name'] = position_df.apply(lambda row: row['extension_name'].rstrip(), axis=1)
+    if not position_df.empty:
+        position_df['extension_name'] = position_df['extension_name'].str.rstrip()
     return position_df
 
 
