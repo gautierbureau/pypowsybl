@@ -642,7 +642,8 @@ public final class PyPowsyblApiHeader {
         VOLTAGE_SOURCE_CONVERTER,
         DC_GROUND,
         DC_SWITCH,
-        DC_BUS;
+        DC_BUS,
+        OVERLOAD_MANAGEMENT_SYSTEM;
 
         @CEnumValue
         public native int getCValue();
