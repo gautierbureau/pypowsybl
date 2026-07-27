@@ -504,7 +504,7 @@ def test_generator_remote_reactive_power_control():
     extension_name = 'generatorRemoteReactivePowerControl'
     assert n.get_extensions(extension_name).empty
 
-    n.create_extensions(extension_name, generator_id='GH1', target_q=200.0,
+    n.create_extensions(extension_name, id='GH1', target_q=200.0,
                         regulated_element_id='LINE_S2S3', regulated_side='ONE', enabled=True)
     e = n.get_extensions(extension_name).loc['GH1']
     assert e.target_q == 200.0
@@ -512,7 +512,7 @@ def test_generator_remote_reactive_power_control():
     assert e.regulated_side == 'ONE'
     assert e.enabled
 
-    n.update_extensions(extension_name, generator_id='GH1', target_q=150.0, enabled=False)
+    n.update_extensions(extension_name, id='GH1', target_q=150.0, enabled=False)
     e = n.get_extensions(extension_name).loc['GH1']
     assert e.target_q == 150.0
     assert not e.enabled
@@ -521,7 +521,7 @@ def test_generator_remote_reactive_power_control():
     assert extensions_information.loc[extension_name]['detail'] == \
            'it allows to control the reactive power at a remote terminal from a generator'
     assert extensions_information.loc[extension_name]['attributes'] == \
-           'index : generator_id (str), target_q (float), regulated_element_id (str), regulated_side (str), enabled (bool)'
+           'index : id (str), target_q (float), regulated_element_id (str), regulated_side (str), enabled (bool)'
 
     n.remove_extensions(extension_name, ['GH1'])
     assert n.get_extensions(extension_name).empty

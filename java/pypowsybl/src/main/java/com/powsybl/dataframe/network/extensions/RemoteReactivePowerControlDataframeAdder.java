@@ -24,7 +24,7 @@ import java.util.List;
 public class RemoteReactivePowerControlDataframeAdder extends AbstractSimpleAdder {
 
     private static final List<SeriesMetadata> METADATA = List.of(
-            SeriesMetadata.stringIndex("generator_id"),
+            SeriesMetadata.stringIndex("id"),
             SeriesMetadata.doubles("target_q"),
             SeriesMetadata.strings("regulated_element_id"),
             SeriesMetadata.strings("regulated_side"),
@@ -44,7 +44,7 @@ public class RemoteReactivePowerControlDataframeAdder extends AbstractSimpleAdde
         private final IntSeries enabled;
 
         RemoteReactivePowerControlSerie(UpdatingDataframe dataframe) {
-            this.generatorId = dataframe.getStrings("generator_id");
+            this.generatorId = dataframe.getStrings("id");
             this.targetQ = dataframe.getDoubles("target_q");
             this.regulatedElement = dataframe.getStrings("regulated_element_id");
             this.regulatedSide = dataframe.getStrings("regulated_side");

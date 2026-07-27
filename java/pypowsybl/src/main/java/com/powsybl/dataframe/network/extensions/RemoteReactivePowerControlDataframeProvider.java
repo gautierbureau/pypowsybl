@@ -36,7 +36,7 @@ public class RemoteReactivePowerControlDataframeProvider extends AbstractSingleD
     public ExtensionInformation getExtensionInformation() {
         return new ExtensionInformation(RemoteReactivePowerControl.NAME,
                 "it allows to control the reactive power at a remote terminal from a generator",
-                "index : generator_id (str), target_q (float), regulated_element_id (str), regulated_side (str), enabled (bool)");
+                "index : id (str), target_q (float), regulated_element_id (str), regulated_side (str), enabled (bool)");
     }
 
     private Stream<RemoteReactivePowerControl> itemsStream(Network network) {
@@ -64,7 +64,7 @@ public class RemoteReactivePowerControlDataframeProvider extends AbstractSingleD
     @Override
     public NetworkDataframeMapper createMapper() {
         return NetworkDataframeMapperBuilder.ofStream(this::itemsStream, this::getOrThrow)
-                .stringsIndex("generator_id", rrpc -> rrpc.getExtendable().getId())
+                .stringsIndex("id", rrpc -> rrpc.getExtendable().getId())
                 .doubles("target_q", (rrpc, context) -> rrpc.getTargetQ(),
                         (rrpc, targetQ, context) -> rrpc.setTargetQ(targetQ))
                 .strings("regulated_element_id", this::getRegulatedElementId, this::setRegulatedTerminal)
