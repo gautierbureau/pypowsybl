@@ -997,6 +997,10 @@ void addMappingRecipe(JavaHandle dynamicMappingHandle, std::string mappingName, 
 
 std::vector<std::string> getDynamicMappingProviders();
 
+void setGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getGeneratorPropertiesProviders();
+
 SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
 
 SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle);

@@ -48,6 +48,7 @@ import com.powsybl.dynamicsimulation.EventModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.dynawo.mappings.MappingParameters;
+import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
 import com.powsybl.dynawo.models.BlackBoxModel;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
@@ -121,6 +122,38 @@ public final class DynamicSimulationCFunctions {
         // that has to cross for a caller to see what it can be given and choose one
         return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
                 DynamicModelsMappings.getInstance().getMappingInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "setGeneratorProperties")
+    public static void setGeneratorProperties(IsolateThread thread, ObjectHandle networkHandle,
+                                              CCharPointer providerNamePtr,
+                                              CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                              CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                // the controls a mapping reads are written here as a step of its own, from a named
+                // provider given the study's settings, so they can be set and looked at before a
+                // model is chosen for them. A machine already described is left as it is
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                SynchronousGeneratorPropertiesProviders.getInstance()
+                        .createExtensions(network, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getGeneratorPropertiesProviders")
+    public static ArrayPointer<CCharPointerPointer> getGeneratorPropertiesProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        // one line per registered provider, its name and its description tab apart
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                SynchronousGeneratorPropertiesProviders.getInstance().getProviderInfos().stream()
                         .map(info -> info.name() + "\t" + info.description())
                         .toList()));
     }

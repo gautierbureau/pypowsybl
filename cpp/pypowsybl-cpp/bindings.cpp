@@ -211,6 +211,9 @@ void dynamicSimulationBindings(py::module_& m) {
     m.def("add_mapping_recipe", &pypowsybl::addMappingRecipe, py::arg("dynamic_mapping_handle"),
           py::arg("mapping_name"), py::arg("parameters"));
     m.def("get_dynamic_mapping_providers", &pypowsybl::getDynamicMappingProviders);
+    m.def("set_generator_properties", &pypowsybl::setGeneratorProperties, py::arg("network_handle"),
+          py::arg("provider_name"), py::arg("parameters"));
+    m.def("get_generator_properties_providers", &pypowsybl::getGeneratorPropertiesProviders);
     m.def("create_timeseries_mapping", &pypowsybl::createTimeseriesMapping);
     m.def("create_event_mapping", &pypowsybl::createEventMapping);
 
