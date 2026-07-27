@@ -41,8 +41,12 @@ public class RemoteReactivePowerControlDataframeProvider extends AbstractSingleD
 
     private Stream<RemoteReactivePowerControl> itemsStream(Network network) {
         return network.getGeneratorStream().filter(Objects::nonNull)
-                .map(generator -> (RemoteReactivePowerControl) generator.getExtension(RemoteReactivePowerControl.class))
+                .map(RemoteReactivePowerControlDataframeProvider::getExtension)
                 .filter(Objects::nonNull);
+    }
+
+    private static RemoteReactivePowerControl getExtension(Generator generator) {
+        return generator.getExtension(RemoteReactivePowerControl.class);
     }
 
     private RemoteReactivePowerControl getOrThrow(Network network, String id) {
@@ -64,7 +68,7 @@ public class RemoteReactivePowerControlDataframeProvider extends AbstractSingleD
                 .doubles("target_q", (rrpc, context) -> rrpc.getTargetQ(),
                         (rrpc, targetQ, context) -> rrpc.setTargetQ(targetQ))
                 .strings("regulated_element_id", this::getRegulatedElementId, this::setRegulatedTerminal)
-                .strings("regulated_side", rrpc -> getTerminalSideStr(rrpc.getRegulatingTerminal()), false)
+                .strings("regulated_side", rrpc -> getTerminalSideStr(rrpc.getRegulatingTerminal()))
                 .booleans("enabled", RemoteReactivePowerControl::isEnabled, RemoteReactivePowerControl::setEnabled)
                 .build();
     }
