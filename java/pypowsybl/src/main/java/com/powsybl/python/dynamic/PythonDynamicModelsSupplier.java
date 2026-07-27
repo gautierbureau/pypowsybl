@@ -308,8 +308,9 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
                 || !(equipmentModel.getEquipment() instanceof Generator equipment)) {
             return;
         }
+        String baseId = baseSetId(equipmentModel.getParameterSetId(), equipmentModel.getLib());
         ParametersSet set = mappingParameters.getModelParameters().stream()
-                .filter(s -> s.getId().equals(equipmentModel.getParameterSetId()))
+                .filter(s -> s.getId().equals(baseId))
                 .findFirst()
                 .orElse(null);
         if (set == null) {
@@ -338,6 +339,29 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
         valuedModel.setParameterSetId(completedId);
         LOGGER.info("Set {} did not value model {} of {}, {} derived from it holds {} more",
                 set.getId(), equipmentModel.getLib(), equipment.getId(), completedId, added.size());
+    }
+
+    /**
+     * The base a completed set was derived from: the model's set with the suffix completing adds
+     * taken back off, where taking it off names a set that is really there.
+     * <p>
+     * Completing mutates the model to point at the set it derives, and a model is read more than
+     * once, to gather the sets and then to build the dyd. So on the second read the model already
+     * holds the completed set, and completing it again from there would grow the name a suffix at
+     * a time and never settle on a model the completion cannot fully value. Completing from the
+     * base each time settles it: the same completed set the first time and every time after.
+     */
+    private String baseSetId(String currentId, String lib) {
+        String suffix = "_" + lib;
+        if (currentId.endsWith(suffix)) {
+            String stripped = currentId.substring(0, currentId.length() - suffix.length());
+            boolean strippedExists = mappingParameters.getModelParameters().stream()
+                    .anyMatch(s -> s.getId().equals(stripped));
+            if (strippedExists) {
+                return stripped;
+            }
+        }
+        return currentId;
     }
 
     /**

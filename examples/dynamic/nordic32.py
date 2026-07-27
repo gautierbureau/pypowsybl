@@ -15,10 +15,9 @@ There is no detailed counterpart of these controls, so the study is DynaWaltz on
 machines are not taken to sit behind a transformer, so ``tso_voltage_min`` is set above their
 voltage, which lands them on the plain models the reference uses rather than the transformer ones.
 
-This example goes as far as the model each machine resolves to, which is what the controls decide.
-Running the system needs the parameter values the Nordic models expect, which the reference ships
-as a hand written ``Nordic.par`` and the generic parameter generator does not yet produce for these
-models; that is a step of its own, not shown here.
+The Nordic models expect parameter values that are not derivable from the network; the mapping
+ships them, from the system's reference description, and values each machine from them rather than
+generating, so the study runs as the reference does.
 
 Load the Nordic network from a Dynawo distribution, for instance
 ``<dynawo>/examples/DynaWaltz/Nordic/Nordic.xiidm``, and point ``dynawo.home_dir`` at that Dynawo.
@@ -53,6 +52,9 @@ def main(nordic_xiidm: str) -> None:
     models = mapping.get_models(network)
     generators = models[models["static_id"].str.match(r"g\d+")]
     print(generators["model"].to_string())
+
+    result = dyn.Simulation().run(network, mapping, dyn.EventMapping())
+    print(f"\nsimulation status: {result.status().name} {result.status_text()}")
 
 
 if __name__ == "__main__":
