@@ -167,6 +167,10 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
             setMappingParameters(fresh);
             return fresh;
         });
+        // the catalog is a JVM-wide singleton and this process is long-lived, so start from the base
+        // catalog: without this a study registers what it built and the next reads it as installed,
+        // pointing at a temp directory the earlier study has since taken down
+        ModelConfigsHandler.getInstance().resetToBase();
         for (Recipe recipe : recipes) {
             DynamicModelsMapping mapping = DynamicModelsMappings.getInstance()
                     .create(recipe.name(), recipe.parameters());
