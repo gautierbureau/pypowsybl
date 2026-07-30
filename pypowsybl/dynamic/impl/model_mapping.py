@@ -126,6 +126,11 @@ class ModelMapping:
         The parameters read from the network are left out: they hold no value to look at, only the
         name of the network quantity they follow.
 
+        A mapping added with :func:`create_mapping` is a recipe with no network of its own, so the
+        sets it generates do not exist until it resolves — at the first :func:`get_models` or when
+        the simulation runs. Called before that, this returns only sets already there (loaded from a
+        file or declared in the platform configuration), the recipe's own among them once resolved.
+
         Returns:
             a dataframe indexed by parameter set id, holding the name, type and value of each
         """

@@ -10,6 +10,11 @@ package com.powsybl.python.dynamic;
 import com.powsybl.commons.report.ReportNode;
 import com.powsybl.dynamicsimulation.DynamicModel;
 import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.dynawo.mappings.DynamicMappingProvider;
+import com.powsybl.dynawo.mappings.DynamicModelsMapping;
+import com.powsybl.dynawo.mappings.MappedModelsSupplier;
+import com.powsybl.dynawo.mappings.MappingParameters;
+import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
 import com.powsybl.dynawo.models.generators.SynchronousGeneratorBuilder;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.iidm.network.Network;
@@ -17,6 +22,7 @@ import com.powsybl.iidm.network.test.EurostagTutorialExample1Factory;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,6 +64,25 @@ class PythonDynamicModelsSupplierTest {
                 .isEqualTo("a_set_of_its_own");
     }
 
+    @Test
+    void shouldResolveARecipeOnceAcrossRepeatedGets() {
+        Network network = EurostagTutorialExample1Factory.create();
+        CountingMappingProvider.CREATE_COUNT.set(0);
+
+        PythonDynamicModelsSupplier supplier = new PythonDynamicModelsSupplier();
+        supplier.addMappingRecipe(CountingMappingProvider.NAME, MappingParameters.empty());
+
+        // get runs once for get_models and again when the simulation reads the supplier; the recipe
+        // must be resolved only the first time, or its models are registered into the JVM-wide
+        // catalog twice and its parameter sets gathered twice
+        supplier.get(network, ReportNode.NO_OP);
+        supplier.get(network, ReportNode.NO_OP);
+
+        assertThat(CountingMappingProvider.CREATE_COUNT.get())
+                .as("the recipe is resolved once, not on every get")
+                .isEqualTo(1);
+    }
+
     /**
      * A supplier holding a description of the equipment valued by a set of the mapping's own,
      * which is what applying a mapping leaves behind.
@@ -87,5 +112,62 @@ class PythonDynamicModelsSupplierTest {
     private static String parameterSetIdOf(List<DynamicModel> models) {
         assertThat(models).hasSize(1);
         return ((com.powsybl.dynawo.models.AbstractBlackBoxModel) models.get(0)).getParameterSetId();
+    }
+
+    /**
+     * A registered mapping that counts how often it is created, to see a recipe is resolved once.
+     * Registered through a services file under test resources, discovered like any other mapping.
+     */
+    public static final class CountingMappingProvider implements DynamicMappingProvider {
+
+        static final String NAME = "TestMemoizedRecipe";
+        static final AtomicInteger CREATE_COUNT = new AtomicInteger();
+
+        @Override
+        public String getName() {
+            return NAME;
+        }
+
+        @Override
+        public String getDescription() {
+            return "counts how often a recipe is resolved, for a test";
+        }
+
+        @Override
+        public DynamicModelsMapping create(MappingParameters parameters) {
+            CREATE_COUNT.incrementAndGet();
+            return new EmptyMapping();
+        }
+    }
+
+    /**
+     * A mapping that covers nothing, enough for the resolution to run without a network of models.
+     */
+    private static final class EmptyMapping implements DynamicModelsMapping {
+
+        @Override
+        public String getName() {
+            return CountingMappingProvider.NAME;
+        }
+
+        @Override
+        public DynawoSimulationParameters.SolverType getSolverType() {
+            return DynawoSimulationParameters.SolverType.IDA;
+        }
+
+        @Override
+        public void createExtensions(Network network) {
+            // covers nothing, so describes nothing
+        }
+
+        @Override
+        public List<MappedModelsSupplier.MappedModel> createModelConfigs(Network network) {
+            return List.of();
+        }
+
+        @Override
+        public List<ParametersSet> createParameters(Network network, ModelDescriptionLookup descriptions) {
+            return List.of();
+        }
     }
 }
