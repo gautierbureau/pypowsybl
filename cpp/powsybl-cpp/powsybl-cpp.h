@@ -997,9 +997,17 @@ void addMappingRecipe(JavaHandle dynamicMappingHandle, std::string mappingName, 
 
 std::vector<std::string> getDynamicMappingProviders();
 
-void setGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
+void addSynchronousGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
 
-std::vector<std::string> getGeneratorPropertiesProviders();
+std::vector<std::string> getSynchronousGeneratorPropertiesProviders();
+
+void addTapChangerBlockings(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getTapChangerBlockingsProviders();
+
+void addDynamicSimulationExtensions(JavaHandle networkHandle, std::string systemName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getDynamicSimulationSystems();
 
 SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
 

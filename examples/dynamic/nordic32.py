@@ -33,11 +33,13 @@ def main(nordic_xiidm: str) -> None:
     network = pp.network.load(nordic_xiidm)
     lf.run_ac(network)
 
-    # what the providers offer, name and description
-    print(dyn.get_generator_properties_providers())
+    # what the systems offer, name and description
+    print(dyn.get_dynamic_simulation_systems())
 
-    # the controls of the system, machine by machine, before any model is chosen
-    dyn.set_generator_properties(network, "Nordic32")
+    # every extension the Nordic 32 system needs, in one step: the controls machine by machine and
+    # the tap changer blockings. The finer add_synchronous_generator_properties and
+    # add_tap_changer_blockings add one kind at a time where that control is wanted.
+    dyn.add_dynamic_simulation_extensions(network, "Nordic32")
 
     # read them back off the network to see what was written
     properties = network.get_extensions("synchronousGeneratorProperties")
@@ -59,6 +61,6 @@ def main(nordic_xiidm: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("usage: nordic32_energy_source_free.py <path to Nordic.xiidm>")
+        print("usage: nordic32.py <path to Nordic.xiidm>")
         raise SystemExit(2)
     main(sys.argv[1])

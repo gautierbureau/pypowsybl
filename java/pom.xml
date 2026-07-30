@@ -72,6 +72,8 @@
         <!-- the mapping lives in a build of powsybl-dynawo newer than the one the dependencies
              declare, on the same powsybl-core -->
         <powsybl-dynawo.version>3.4.0-SNAPSHOT</powsybl-dynawo.version>
+        <!-- the temp-suffixed powsybl-core carrying the tap changer blockings iidm extension -->
+        <powsybl-core.version>7.4.0-tcb-SNAPSHOT</powsybl-core.version>
         <powsybl-open-reac.version>0.18.0</powsybl-open-reac.version>
     </properties>
 
@@ -114,6 +116,24 @@
                 <groupId>com.powsybl</groupId>
                 <artifactId>powsybl-dynawo-extensions-serde</artifactId>
                 <version>${powsybl-dynawo.version}</version>
+            </dependency>
+            <!-- the tap changer blockings iidm extension lives in a build of powsybl-core newer
+                 than the one powsybl-dependencies declares; pin the modules that carry it, or the
+                 released core clobbers those classes -->
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-iidm-extensions</artifactId>
+                <version>${powsybl-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-iidm-impl</artifactId>
+                <version>${powsybl-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-iidm-serde</artifactId>
+                <version>${powsybl-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.powsybl</groupId>

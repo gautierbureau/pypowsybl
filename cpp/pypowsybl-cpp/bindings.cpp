@@ -211,9 +211,15 @@ void dynamicSimulationBindings(py::module_& m) {
     m.def("add_mapping_recipe", &pypowsybl::addMappingRecipe, py::arg("dynamic_mapping_handle"),
           py::arg("mapping_name"), py::arg("parameters"));
     m.def("get_dynamic_mapping_providers", &pypowsybl::getDynamicMappingProviders);
-    m.def("set_generator_properties", &pypowsybl::setGeneratorProperties, py::arg("network_handle"),
+    m.def("add_synchronous_generator_properties", &pypowsybl::addSynchronousGeneratorProperties, py::arg("network_handle"),
           py::arg("provider_name"), py::arg("parameters"));
-    m.def("get_generator_properties_providers", &pypowsybl::getGeneratorPropertiesProviders);
+    m.def("get_synchronous_generator_properties_providers", &pypowsybl::getSynchronousGeneratorPropertiesProviders);
+    m.def("add_tap_changer_blockings", &pypowsybl::addTapChangerBlockings, py::arg("network_handle"),
+          py::arg("provider_name"), py::arg("parameters"));
+    m.def("get_tap_changer_blockings_providers", &pypowsybl::getTapChangerBlockingsProviders);
+    m.def("add_dynamic_simulation_extensions", &pypowsybl::addDynamicSimulationExtensions, py::arg("network_handle"),
+          py::arg("system_name"), py::arg("parameters"));
+    m.def("get_dynamic_simulation_systems", &pypowsybl::getDynamicSimulationSystems);
     m.def("create_timeseries_mapping", &pypowsybl::createTimeseriesMapping);
     m.def("create_event_mapping", &pypowsybl::createEventMapping);
 

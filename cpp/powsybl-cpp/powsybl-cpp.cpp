@@ -1853,7 +1853,7 @@ std::vector<std::string> getDynamicMappingProviders() {
     return providers.get();
 }
 
-void setGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters) {
+void addSynchronousGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters) {
     std::vector<std::string> names;
     std::vector<std::string> values;
     names.reserve(parameters.size());
@@ -1864,14 +1864,56 @@ void setGeneratorProperties(JavaHandle networkHandle, std::string providerName, 
     }
     ToCharPtrPtr namesPtr(names);
     ToCharPtrPtr valuesPtr(values);
-    PowsyblCaller::get()->callJava<>(::setGeneratorProperties, networkHandle, (char*) providerName.c_str(),
+    PowsyblCaller::get()->callJava<>(::addSynchronousGeneratorProperties, networkHandle, (char*) providerName.c_str(),
                                     namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
 }
 
-std::vector<std::string> getGeneratorPropertiesProviders() {
-    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getGeneratorPropertiesProviders);
+std::vector<std::string> getSynchronousGeneratorPropertiesProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getSynchronousGeneratorPropertiesProviders);
     ToStringVector providers(providersArrayPtr);
     return providers.get();
+}
+
+void addTapChangerBlockings(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addTapChangerBlockings, networkHandle, (char*) providerName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getTapChangerBlockingsProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getTapChangerBlockingsProviders);
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
+}
+
+void addDynamicSimulationExtensions(JavaHandle networkHandle, std::string systemName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addDynamicSimulationExtensions, networkHandle, (char*) systemName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getDynamicSimulationSystems() {
+    auto systemsArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicSimulationSystems);
+    ToStringVector systems(systemsArrayPtr);
+    return systems.get();
 }
 
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {

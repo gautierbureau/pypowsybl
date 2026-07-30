@@ -48,7 +48,9 @@ import com.powsybl.dynamicsimulation.EventModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.dynawo.mappings.MappingParameters;
+import com.powsybl.dynawo.mappings.DynamicSimulationSystems;
 import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
+import com.powsybl.dynawo.mappings.TapChangerBlockingsProviders;
 import com.powsybl.dynawo.models.BlackBoxModel;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
@@ -126,12 +128,12 @@ public final class DynamicSimulationCFunctions {
                         .toList()));
     }
 
-    @CEntryPoint(name = "setGeneratorProperties")
-    public static void setGeneratorProperties(IsolateThread thread, ObjectHandle networkHandle,
-                                              CCharPointer providerNamePtr,
-                                              CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
-                                              CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
-                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+    @CEntryPoint(name = "addSynchronousGeneratorProperties")
+    public static void addSynchronousGeneratorProperties(IsolateThread thread, ObjectHandle networkHandle,
+                                                         CCharPointer providerNamePtr,
+                                                         CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                         CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                         ExceptionHandlerPointer exceptionHandlerPtr) {
         doCatch(exceptionHandlerPtr, new Runnable() {
             @Override
             public void run() {
@@ -148,12 +150,68 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
-    @CEntryPoint(name = "getGeneratorPropertiesProviders")
-    public static ArrayPointer<CCharPointerPointer> getGeneratorPropertiesProviders(IsolateThread thread,
+    @CEntryPoint(name = "getSynchronousGeneratorPropertiesProviders")
+    public static ArrayPointer<CCharPointerPointer> getSynchronousGeneratorPropertiesProviders(IsolateThread thread,
             ExceptionHandlerPointer exceptionHandlerPtr) {
-        // one line per registered provider, its name and its description tab apart
         return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
                 SynchronousGeneratorPropertiesProviders.getInstance().getProviderInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addTapChangerBlockings")
+    public static void addTapChangerBlockings(IsolateThread thread, ObjectHandle networkHandle,
+                                              CCharPointer providerNamePtr,
+                                              CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                              CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                TapChangerBlockingsProviders.getInstance()
+                        .createExtensions(network, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getTapChangerBlockingsProviders")
+    public static ArrayPointer<CCharPointerPointer> getTapChangerBlockingsProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                TapChangerBlockingsProviders.getInstance().getProviderInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addDynamicSimulationExtensions")
+    public static void addDynamicSimulationExtensions(IsolateThread thread, ObjectHandle networkHandle,
+                                                      CCharPointer systemNamePtr,
+                                                      CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                      CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                      ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String systemName = CTypeUtil.toString(systemNamePtr);
+                // every extension a named system reads, added at once
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                DynamicSimulationSystems.getInstance()
+                        .createExtensions(network, systemName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getDynamicSimulationSystems")
+    public static ArrayPointer<CCharPointerPointer> getDynamicSimulationSystems(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicSimulationSystems.getInstance().getSystemInfos().stream()
                         .map(info -> info.name() + "\t" + info.description())
                         .toList()));
     }
