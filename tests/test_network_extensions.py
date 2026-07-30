@@ -547,6 +547,46 @@ def test_secondary_voltage_control():
     assert e2.participate == False
 
 
+def test_tap_changer_blockings():
+    n = pn.create_eurostag_tutorial_example1_network()
+    extension_name = 'tapChangerBlockings'
+    blockings_df = pd.DataFrame.from_records(
+        index='name',
+        columns=['name'],
+        data=[('tcb1',)])
+    measurement_points_df = pd.DataFrame.from_records(
+        index='id',
+        columns=['id', 'tcb_name', 'buses', 'busbar_section_ids'],
+        data=[('mp1', 'tcb1', 'VLHV1:NHV1,VLHV2:NHV2', ''),
+              ('mp2', 'tcb1', '', 'BBS2,BBS3')])
+    control_voltage_levels_df = pd.DataFrame.from_records(
+        index='id',
+        columns=['id', 'tcb_name', 'force_one_transformer_loads'],
+        data=[('VLHV1', 'tcb1', False),
+              ('VLHV2', 'tcb1', True)])
+    n.create_extensions(extension_name, [blockings_df, measurement_points_df, control_voltage_levels_df])
+
+    blockings = n.get_extensions(extension_name, 'blockings')
+    assert list(blockings.index) == ['tcb1']
+
+    mp1 = n.get_extensions(extension_name, 'measurement_points').loc['mp1']
+    assert mp1.tcb_name == 'tcb1'
+    # buses keep their voltage level, told apart from the busbar sections
+    assert mp1.buses == 'VLHV1:NHV1,VLHV2:NHV2'
+    assert mp1.busbar_section_ids == ''
+    mp2 = n.get_extensions(extension_name, 'measurement_points').loc['mp2']
+    assert mp2.buses == ''
+    assert mp2.busbar_section_ids == 'BBS2,BBS3'
+
+    cvls = n.get_extensions(extension_name, 'control_voltage_levels')
+    assert cvls.loc['VLHV1'].tcb_name == 'tcb1'
+    assert cvls.loc['VLHV1'].force_one_transformer_loads == False
+    assert cvls.loc['VLHV2'].force_one_transformer_loads == True
+
+    n.remove_extensions(extension_name, ['tcb1'])
+    assert n.get_extensions(extension_name, 'blockings').empty
+
+
 def test_geo_data():
     n = pn.load(str(DATA_DIR.joinpath('MicroGridTestConfiguration_T4_BE_BB_Complete_v2.zip')), {'iidm.import.cgmes.post-processors': 'cgmesGLImport'})
     substation_expected = pd.DataFrame.from_records(index='id',
