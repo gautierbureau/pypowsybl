@@ -363,6 +363,9 @@ public final class DynamicSimulationCFunctions {
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
                 // the models are built first, so that the sets derived for them are known
                 dynamicMapping.get(network, reportNode);
+                // and what a model given after its parameters were written had added to value it is
+                // said on the report the run keeps, once, from the sets get() derived
+                ParameterCompletionReports.report(reportNode, dynamicMapping.getCompletions());
                 dynamicMapping.getMappingParameters().ifPresent(mappingParameters -> {
                     DynawoSimulationParameters runParameters = dynamicMapping.getRunParameters();
                     // detached from a run before it: these settings belong to the mapping and are
