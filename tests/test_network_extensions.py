@@ -651,6 +651,123 @@ def test_voltage_per_reactive_power_control():
     assert network.get_extensions('voltagePerReactivePowerControl').empty
 
 
+def test_generator_fortescue():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('generatorFortescue').empty
+
+    network.create_extensions('generatorFortescue', id='GEN', grounded=True, grounding_r=0.1, grounding_x=0.2,
+                              rz=1.0, xz=2.0, rn=3.0, xn=4.0)
+    e = network.get_extensions('generatorFortescue').loc['GEN']
+    assert e.grounded
+    assert e.grounding_r == pytest.approx(0.1, abs=1e-6)
+    assert e.rz == pytest.approx(1.0, abs=1e-6)
+    assert e.xn == pytest.approx(4.0, abs=1e-6)
+
+    network.update_extensions('generatorFortescue', id='GEN', rn=5.0, grounded=False)
+    e = network.get_extensions('generatorFortescue').loc['GEN']
+    assert e.rn == pytest.approx(5.0, abs=1e-6)
+    assert not e.grounded
+
+    network.remove_extensions('generatorFortescue', ['GEN'])
+    assert network.get_extensions('generatorFortescue').empty
+
+
+def test_line_fortescue():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('lineFortescue').empty
+
+    network.create_extensions('lineFortescue', id='NHV1_NHV2_1', rz=1.0, xz=2.0, g1z=3.0, b1z=4.0, g2z=5.0, b2z=6.0,
+                              open_phase_a=True, open_phase_b=False, open_phase_c=False)
+    e = network.get_extensions('lineFortescue').loc['NHV1_NHV2_1']
+    assert e.rz == pytest.approx(1.0, abs=1e-6)
+    assert e.b2z == pytest.approx(6.0, abs=1e-6)
+    assert e.open_phase_a
+    assert not e.open_phase_b
+
+    network.update_extensions('lineFortescue', id='NHV1_NHV2_1', open_phase_a=False, xz=7.0)
+    e = network.get_extensions('lineFortescue').loc['NHV1_NHV2_1']
+    assert not e.open_phase_a
+    assert e.xz == pytest.approx(7.0, abs=1e-6)
+
+    network.remove_extensions('lineFortescue', ['NHV1_NHV2_1'])
+    assert network.get_extensions('lineFortescue').empty
+
+
+def test_load_asymmetrical():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('loadAsymmetrical').empty
+
+    network.create_extensions('loadAsymmetrical', id='LOAD', connection_type='DELTA',
+                              delta_pa=1.0, delta_pb=2.0, delta_pc=3.0,
+                              delta_qa=4.0, delta_qb=5.0, delta_qc=6.0)
+    e = network.get_extensions('loadAsymmetrical').loc['LOAD']
+    assert e.connection_type == 'DELTA'
+    assert e.delta_pa == pytest.approx(1.0, abs=1e-6)
+    assert e.delta_qc == pytest.approx(6.0, abs=1e-6)
+
+    network.update_extensions('loadAsymmetrical', id='LOAD', connection_type='Y', delta_pa=9.0)
+    e = network.get_extensions('loadAsymmetrical').loc['LOAD']
+    assert e.connection_type == 'Y'
+    assert e.delta_pa == pytest.approx(9.0, abs=1e-6)
+
+    network.remove_extensions('loadAsymmetrical', ['LOAD'])
+    assert network.get_extensions('loadAsymmetrical').empty
+
+
+def test_two_windings_transformer_fortescue():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('twoWindingsTransformerFortescue').empty
+
+    network.create_extensions('twoWindingsTransformerFortescue', id='NGEN_NHV1', rz=1.0, xz=2.0, free_fluxes=True,
+                              xm=3.0, connection_type1='Y_GROUNDED', connection_type2='DELTA',
+                              grounding_r1=4.0, grounding_x1=5.0, grounding_r2=6.0, grounding_x2=7.0)
+    e = network.get_extensions('twoWindingsTransformerFortescue').loc['NGEN_NHV1']
+    assert e.free_fluxes
+    assert e.connection_type1 == 'Y_GROUNDED'
+    assert e.connection_type2 == 'DELTA'
+    assert e.grounding_x2 == pytest.approx(7.0, abs=1e-6)
+
+    network.update_extensions('twoWindingsTransformerFortescue', id='NGEN_NHV1', connection_type2='Y', xm=8.0)
+    e = network.get_extensions('twoWindingsTransformerFortescue').loc['NGEN_NHV1']
+    assert e.connection_type2 == 'Y'
+    assert e.xm == pytest.approx(8.0, abs=1e-6)
+
+    network.remove_extensions('twoWindingsTransformerFortescue', ['NGEN_NHV1'])
+    assert network.get_extensions('twoWindingsTransformerFortescue').empty
+
+
+def test_three_windings_transformer_fortescue():
+    network = util.create_three_windings_transformer_network()
+    transformer_id = network.get_3_windings_transformers().index[0]
+    assert network.get_extensions('threeWindingsTransformerFortescue').empty
+
+    network.create_extensions('threeWindingsTransformerFortescue', id=transformer_id,
+                              rz1=10.0, xz1=20.0, free_fluxes1=False, connection_type1='Y',
+                              grounding_r1=30.0, grounding_x1=40.0,
+                              rz2=11.0, xz2=21.0, free_fluxes2=True, connection_type2='Y_GROUNDED',
+                              grounding_r2=31.0, grounding_x2=41.0,
+                              rz3=12.0, xz3=22.0, free_fluxes3=False, connection_type3='DELTA',
+                              grounding_r3=32.0, grounding_x3=42.0)
+    e = network.get_extensions('threeWindingsTransformerFortescue').loc[transformer_id]
+    assert e.rz1 == pytest.approx(10.0, abs=1e-6)
+    assert e.connection_type1 == 'Y'
+    assert e.free_fluxes2
+    assert e.connection_type2 == 'Y_GROUNDED'
+    assert e.grounding_x3 == pytest.approx(42.0, abs=1e-6)
+    assert e.connection_type3 == 'DELTA'
+
+    network.update_extensions('threeWindingsTransformerFortescue', id=transformer_id, rz3=99.0, connection_type3='Y')
+    e = network.get_extensions('threeWindingsTransformerFortescue').loc[transformer_id]
+    assert e.rz3 == pytest.approx(99.0, abs=1e-6)
+    assert e.connection_type3 == 'Y'
+    # the other legs are untouched
+    assert e.rz1 == pytest.approx(10.0, abs=1e-6)
+    assert e.rz2 == pytest.approx(11.0, abs=1e-6)
+
+    network.remove_extensions('threeWindingsTransformerFortescue', [transformer_id])
+    assert network.get_extensions('threeWindingsTransformerFortescue').empty
+
+
 def test_batteries_voltage_regulation():
     network = pn.load(str(TEST_DIR.joinpath('battery.xiidm')))
     assert network.get_extensions('voltageRegulation').empty
@@ -733,3 +850,7 @@ def test_get_extensions_information():
     assert extensions_information.loc['synchronousGeneratorProperties']['attributes'] == 'index : id (str), numberOfWindings (str), governor (str), voltageRegulator (str), pss (str), auxiliaries (bool), internalTransformer (bool), rpcl (str), uva (str), aggregated (bool), qlim (bool)'
     assert extensions_information.loc['synchronizedGeneratorProperties']['attributes'] == 'index : id (str), type (str), rpcl2 (bool)'
     assert extensions_information.loc['generatorConnectionLevel']['attributes'] == 'index : id (str), level (str)'
+    assert extensions_information.loc['generatorFortescue']['attributes'] == 'index : id (str), grounded (bool), grounding_r (float), grounding_x (float), rz (float), xz (float), rn (float), xn (float)'
+    assert extensions_information.loc['lineFortescue']['attributes'] == 'index : id (str), rz (float), xz (float), g1z (float), b1z (float), g2z (float), b2z (float), open_phase_a (bool), open_phase_b (bool), open_phase_c (bool)'
+    assert extensions_information.loc['loadAsymmetrical']['attributes'] == 'index : id (str), connection_type (str), delta_pa (float), delta_pb (float), delta_pc (float), delta_qa (float), delta_qb (float), delta_qc (float)'
+    assert extensions_information.loc['twoWindingsTransformerFortescue']['attributes'] == 'index : id (str), rz (float), xz (float), free_fluxes (bool), xm (float), connection_type1 (str), connection_type2 (str), grounding_r1 (float), grounding_x1 (float), grounding_r2 (float), grounding_x2 (float)'
