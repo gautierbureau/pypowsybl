@@ -93,6 +93,19 @@ def create_ieee300(allow_variant_multi_thread_access: bool = False) -> Network:
     return _create_network('ieee300', '', allow_variant_multi_thread_access)
 
 
+def create_nordic32(allow_variant_multi_thread_access: bool = False) -> Network:
+    """
+    Create an instance of the Nordic 32 test system network.
+
+    This is the network alone, without any dynamic simulation characteristics; those are added by a
+    mapping, for instance ``dyn.ModelMapping().create_mapping('Nordic32', withTCB=True)``.
+
+    Returns:
+        a new instance of the Nordic 32 test system network
+    """
+    return _create_network('nordic32', '', allow_variant_multi_thread_access)
+
+
 def create_eurostag_tutorial_example1_network(allow_variant_multi_thread_access: bool = False) -> Network:
     """
     Create an instance of example 1 network of Eurostag tutorial

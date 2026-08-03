@@ -28,6 +28,7 @@ from .impl.network_creation_util import (
     create_ieee57,
     create_ieee118,
     create_ieee300,
+    create_nordic32,
     create_eurostag_tutorial_example1_network,
     create_eurostag_tutorial_example1_with_more_generators_network,
     create_eurostag_tutorial_example1_with_power_limits_network,
