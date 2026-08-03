@@ -651,6 +651,78 @@ def test_voltage_per_reactive_power_control():
     assert network.get_extensions('voltagePerReactivePowerControl').empty
 
 
+def test_battery_short_circuit():
+    network = pn.load(str(TEST_DIR.joinpath('battery.xiidm')))
+    assert network.get_extensions('batteryShortCircuit').empty
+
+    network.create_extensions('batteryShortCircuit', id='BAT', direct_sub_trans_x=1.0, direct_trans_x=2.0,
+                              step_up_transformer_x=3.0)
+    e = network.get_extensions('batteryShortCircuit').loc['BAT']
+    assert e.direct_sub_trans_x == pytest.approx(1.0, abs=1e-6)
+    assert e.direct_trans_x == pytest.approx(2.0, abs=1e-6)
+    assert e.step_up_transformer_x == pytest.approx(3.0, abs=1e-6)
+
+    network.update_extensions('batteryShortCircuit', id='BAT', direct_trans_x=9.0)
+    e = network.get_extensions('batteryShortCircuit').loc['BAT']
+    assert e.direct_trans_x == pytest.approx(9.0, abs=1e-6)
+
+    network.remove_extensions('batteryShortCircuit', ['BAT'])
+    assert network.get_extensions('batteryShortCircuit').empty
+
+
+def test_generator_startup():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('startup').empty
+
+    network.create_extensions('startup', id='GEN', planned_active_power_setpoint=90.0, startup_cost=5.0,
+                              marginal_cost=10.0, planned_outage_rate=0.8, forced_outage_rate=0.7)
+    e = network.get_extensions('startup').loc['GEN']
+    assert e.planned_active_power_setpoint == pytest.approx(90.0, abs=1e-6)
+    assert e.startup_cost == pytest.approx(5.0, abs=1e-6)
+    assert e.marginal_cost == pytest.approx(10.0, abs=1e-6)
+    assert e.planned_outage_rate == pytest.approx(0.8, abs=1e-6)
+    assert e.forced_outage_rate == pytest.approx(0.7, abs=1e-6)
+
+    network.update_extensions('startup', id='GEN', marginal_cost=12.0)
+    e = network.get_extensions('startup').loc['GEN']
+    assert e.marginal_cost == pytest.approx(12.0, abs=1e-6)
+
+    network.remove_extensions('startup', ['GEN'])
+    assert network.get_extensions('startup').empty
+
+
+def test_operating_status():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('operatingStatus').empty
+
+    network.create_extensions('operatingStatus', pd.DataFrame.from_records(index='id', data=[
+        {'id': 'NHV1_NHV2_1', 'status': 'PLANNED_OUTAGE'},
+        {'id': 'NGEN_NHV1', 'status': 'FORCED_OUTAGE'}
+    ]))
+    e = network.get_extensions('operatingStatus')
+    assert e['status']['NHV1_NHV2_1'] == 'PLANNED_OUTAGE'
+    assert e['status']['NGEN_NHV1'] == 'FORCED_OUTAGE'
+
+    network.update_extensions('operatingStatus', id='NHV1_NHV2_1', status='IN_OPERATION')
+    e = network.get_extensions('operatingStatus')
+    assert e['status']['NHV1_NHV2_1'] == 'IN_OPERATION'
+
+    network.remove_extensions('operatingStatus', ['NHV1_NHV2_1', 'NGEN_NHV1'])
+    assert network.get_extensions('operatingStatus').empty
+
+
+def test_operating_status_errors():
+    network = pn.create_eurostag_tutorial_example1_network()
+
+    # a generator is not one of the types accepted by the extension
+    with pytest.raises(pypowsybl.PyPowsyblError,
+                       match="Network element 'GEN' of type GENERATOR cannot have an OperatingStatus extension"):
+        network.create_extensions('operatingStatus', id='GEN', status='IN_OPERATION')
+
+    with pytest.raises(pypowsybl.PyPowsyblError, match='Required column status is missing.'):
+        network.create_extensions('operatingStatus', id='NHV1_NHV2_1')
+
+
 def test_batteries_voltage_regulation():
     network = pn.load(str(TEST_DIR.joinpath('battery.xiidm')))
     assert network.get_extensions('voltageRegulation').empty
@@ -733,3 +805,6 @@ def test_get_extensions_information():
     assert extensions_information.loc['synchronousGeneratorProperties']['attributes'] == 'index : id (str), numberOfWindings (str), governor (str), voltageRegulator (str), pss (str), auxiliaries (bool), internalTransformer (bool), rpcl (str), uva (str), aggregated (bool), qlim (bool)'
     assert extensions_information.loc['synchronizedGeneratorProperties']['attributes'] == 'index : id (str), type (str), rpcl2 (bool)'
     assert extensions_information.loc['generatorConnectionLevel']['attributes'] == 'index : id (str), level (str)'
+    assert extensions_information.loc['batteryShortCircuit']['attributes'] == 'index : id (str), direct_sub_trans_x (float), direct_trans_x (float), step_up_transformer_x (float)'
+    assert extensions_information.loc['startup']['attributes'] == 'index : id (str), planned_active_power_setpoint (float), startup_cost (float), marginal_cost (float), planned_outage_rate (float), forced_outage_rate (float)'
+    assert extensions_information.loc['operatingStatus']['attributes'] == 'index : id (str), status (str)'
