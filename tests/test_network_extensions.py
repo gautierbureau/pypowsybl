@@ -651,6 +651,53 @@ def test_voltage_per_reactive_power_control():
     assert network.get_extensions('voltagePerReactivePowerControl').empty
 
 
+def test_two_windings_transformer_to_be_estimated():
+    network = pn.create_eurostag_tutorial_example1_network()
+    assert network.get_extensions('twoWindingsTransformerToBeEstimated').empty
+
+    network.create_extensions('twoWindingsTransformerToBeEstimated', id='NHV2_NLOAD',
+                              ratio_tap_changer_status=True, phase_tap_changer_status=False)
+    e = network.get_extensions('twoWindingsTransformerToBeEstimated').loc['NHV2_NLOAD']
+    assert e.ratio_tap_changer_status
+    assert not e.phase_tap_changer_status
+
+    network.update_extensions('twoWindingsTransformerToBeEstimated', id='NHV2_NLOAD', phase_tap_changer_status=True)
+    e = network.get_extensions('twoWindingsTransformerToBeEstimated').loc['NHV2_NLOAD']
+    assert e.phase_tap_changer_status
+
+    network.remove_extensions('twoWindingsTransformerToBeEstimated', ['NHV2_NLOAD'])
+    assert network.get_extensions('twoWindingsTransformerToBeEstimated').empty
+
+
+def test_three_windings_transformer_to_be_estimated():
+    network = util.create_three_windings_transformer_network()
+    transformer_id = network.get_3_windings_transformers().index[0]
+    assert network.get_extensions('threeWindingsTransformerToBeEstimated').empty
+
+    network.create_extensions('threeWindingsTransformerToBeEstimated', id=transformer_id,
+                              ratio_tap_changer1_status=True, ratio_tap_changer2_status=False,
+                              ratio_tap_changer3_status=True, phase_tap_changer1_status=False,
+                              phase_tap_changer2_status=True, phase_tap_changer3_status=False)
+    e = network.get_extensions('threeWindingsTransformerToBeEstimated').loc[transformer_id]
+    assert e.ratio_tap_changer1_status
+    assert not e.ratio_tap_changer2_status
+    assert e.ratio_tap_changer3_status
+    assert not e.phase_tap_changer1_status
+    assert e.phase_tap_changer2_status
+    assert not e.phase_tap_changer3_status
+
+    network.update_extensions('threeWindingsTransformerToBeEstimated', id=transformer_id,
+                              ratio_tap_changer2_status=True)
+    e = network.get_extensions('threeWindingsTransformerToBeEstimated').loc[transformer_id]
+    assert e.ratio_tap_changer2_status
+    # the other legs are untouched
+    assert e.ratio_tap_changer1_status
+    assert e.ratio_tap_changer3_status
+
+    network.remove_extensions('threeWindingsTransformerToBeEstimated', [transformer_id])
+    assert network.get_extensions('threeWindingsTransformerToBeEstimated').empty
+
+
 def test_batteries_voltage_regulation():
     network = pn.load(str(TEST_DIR.joinpath('battery.xiidm')))
     assert network.get_extensions('voltageRegulation').empty
@@ -733,3 +780,5 @@ def test_get_extensions_information():
     assert extensions_information.loc['synchronousGeneratorProperties']['attributes'] == 'index : id (str), numberOfWindings (str), governor (str), voltageRegulator (str), pss (str), auxiliaries (bool), internalTransformer (bool), rpcl (str), uva (str), aggregated (bool), qlim (bool)'
     assert extensions_information.loc['synchronizedGeneratorProperties']['attributes'] == 'index : id (str), type (str), rpcl2 (bool)'
     assert extensions_information.loc['generatorConnectionLevel']['attributes'] == 'index : id (str), level (str)'
+    assert extensions_information.loc['twoWindingsTransformerToBeEstimated']['attributes'] == 'index : id (str), ratio_tap_changer_status (bool), phase_tap_changer_status (bool)'
+    assert extensions_information.loc['threeWindingsTransformerToBeEstimated']['attributes'] == 'index : id (str), ratio_tap_changer1_status (bool), ratio_tap_changer2_status (bool), ratio_tap_changer3_status (bool), phase_tap_changer1_status (bool), phase_tap_changer2_status (bool), phase_tap_changer3_status (bool)'
