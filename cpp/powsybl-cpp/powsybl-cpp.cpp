@@ -1813,6 +1813,143 @@ JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle netwo
     c_parameters.get(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
+SeriesArray* getParameterCompletions(JavaHandle dynamicMappingHandle, JavaHandle networkHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getParameterCompletions, dynamicMappingHandle, networkHandle));
+}
+
+SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedParameters, dynamicMappingHandle));
+}
+
+void updateMappedParameter(JavaHandle dynamicMappingHandle, std::string parameterSetId, std::string parameterName, std::string value) {
+    PowsyblCaller::get()->callJava<>(::updateMappedParameter, dynamicMappingHandle, (char*) parameterSetId.c_str(),
+                                    (char*) parameterName.c_str(), (char*) value.c_str());
+}
+
+void loadMappedParameters(JavaHandle dynamicMappingHandle, std::string parametersFile) {
+    PowsyblCaller::get()->callJava<>(::loadMappedParameters, dynamicMappingHandle, (char*) parametersFile.c_str());
+}
+
+SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedModels, dynamicMappingHandle, networkHandle));
+}
+
+void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes, int strict) {
+    PowsyblCaller::get()->callJava<>(::updateDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes, strict);
+}
+
+void addMappingRecipe(JavaHandle dynamicMappingHandle, std::string mappingName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addMappingRecipe, dynamicMappingHandle, (char*) mappingName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getDynamicMappingProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicMappingProviders);
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
+}
+
+void addSynchronousGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addSynchronousGeneratorProperties, networkHandle, (char*) providerName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getSynchronousGeneratorPropertiesProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getSynchronousGeneratorPropertiesProviders);
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
+}
+
+void addTapChangerBlockings(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addTapChangerBlockings, networkHandle, (char*) providerName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getTapChangerBlockingsProviders() {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getTapChangerBlockingsProviders);
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
+}
+
+void addDynamicMappingExtensions(JavaHandle networkHandle, std::string extensionName, std::string providerName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addDynamicMappingExtensions, networkHandle, (char*) extensionName.c_str(),
+                                    (char*) providerName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getDynamicMappingExtensionNames() {
+    auto namesArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicMappingExtensionNames);
+    ToStringVector names(namesArrayPtr);
+    return names.get();
+}
+
+std::vector<std::string> getDynamicMappingExtensionProviders(std::string extensionName) {
+    auto providersArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicMappingExtensionProviders, (char*) extensionName.c_str());
+    ToStringVector providers(providersArrayPtr);
+    return providers.get();
+}
+
+void addDynamicSimulationExtensions(JavaHandle networkHandle, std::string systemName, const std::map<std::string, std::string>& parameters) {
+    std::vector<std::string> names;
+    std::vector<std::string> values;
+    names.reserve(parameters.size());
+    values.reserve(parameters.size());
+    for (std::pair<std::string, std::string> p : parameters) {
+        names.push_back(p.first);
+        values.push_back(p.second);
+    }
+    ToCharPtrPtr namesPtr(names);
+    ToCharPtrPtr valuesPtr(values);
+    PowsyblCaller::get()->callJava<>(::addDynamicSimulationExtensions, networkHandle, (char*) systemName.c_str(),
+                                    namesPtr.get(), (int) names.size(), valuesPtr.get(), (int) values.size());
+}
+
+std::vector<std::string> getDynamicSimulationSystems() {
+    auto systemsArrayPtr = PowsyblCaller::get()->callJava<array*>(::getDynamicSimulationSystems);
+    ToStringVector systems(systemsArrayPtr);
+    return systems.get();
+}
+
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes) {
     PowsyblCaller::get()->callJava<>(::addDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes);
 }

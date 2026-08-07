@@ -1,0 +1,66 @@
+# Copyright (c) 2026, RTE (http://www.rte-france.com)
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# SPDX-License-Identifier: MPL-2.0
+"""
+Run the Nordic 32 test system, whose controls come from the system, not a rule.
+
+Nordic 32 is a voltage stability study: its machines run a Nordic governor and regulator, or hold
+their mechanical power constant, and which is which is a fact of the system rather than something
+deduced from an energy source. So the controls are set with the ``Nordic32`` provider, machine by
+machine, before the mapping chooses a model for them.
+
+There is no detailed counterpart of these controls, so the study is DynaWaltz only. The Nordic
+machines are not taken to sit behind a transformer, so ``tso_voltage_min`` is set above their
+voltage, which lands them on the plain models the reference uses rather than the transformer ones.
+
+The Nordic models expect parameter values that are not derivable from the network; the mapping
+ships them, from the system's reference description, and values each machine from them rather than
+generating, so the study runs as the reference does.
+
+Load the Nordic network from a Dynawo distribution, for instance
+``<dynawo>/examples/DynaWaltz/Nordic/Nordic.xiidm``, and point ``dynawo.home_dir`` at that Dynawo.
+"""
+import sys
+
+import pypowsybl as pp
+import pypowsybl.dynamic as dyn
+import pypowsybl.loadflow as lf
+
+
+def main(nordic_xiidm: str) -> None:
+    network = pp.network.load(nordic_xiidm)
+    lf.run_ac(network)
+
+    # what the systems offer, name and description
+    print(dyn.get_dynamic_simulation_systems())
+
+    # every extension the Nordic 32 system needs, in one step: the controls machine by machine and
+    # the tap changer blockings. The finer add_synchronous_generator_properties and
+    # add_tap_changer_blockings add one kind at a time where that control is wanted.
+    dyn.add_dynamic_simulation_extensions(network, "Nordic32")
+
+    # read them back off the network to see what was written
+    properties = network.get_extensions("synchronousGeneratorProperties")
+    print("\ncontrols set on the machines:")
+    print(properties[["governor", "voltageRegulator", "numberOfWindings"]].to_string())
+
+    mapping = dyn.ModelMapping()
+    # a voltage above the Nordic machines, so none is taken behind a transformer
+    mapping.create_mapping("UniversalDynaWaltz", tso_voltage_min=1000)
+
+    print("\nthe model each machine resolved to, from the controls set above:")
+    models = mapping.get_models(network)
+    generators = models[models["static_id"].str.match(r"g\d+")]
+    print(generators["model"].to_string())
+
+    result = dyn.Simulation().run(network, mapping, dyn.EventMapping())
+    print(f"\nsimulation status: {result.status().name} {result.status_text()}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("usage: nordic32.py <path to Nordic.xiidm>")
+        raise SystemExit(2)
+    main(sys.argv[1])

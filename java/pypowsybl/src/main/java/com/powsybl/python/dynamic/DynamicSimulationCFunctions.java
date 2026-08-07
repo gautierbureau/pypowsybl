@@ -45,7 +45,21 @@ import com.powsybl.dynamicsimulation.OutputVariablesSupplier;
 import com.powsybl.dynamicsimulation.DynamicSimulationParameters;
 import com.powsybl.dynamicsimulation.DynamicSimulationResult;
 import com.powsybl.dynamicsimulation.EventModelsSupplier;
+import com.powsybl.dynawo.DynawoSimulationParameters;
+import com.powsybl.dynawo.mappings.DynamicModelsMappings;
+import com.powsybl.dynawo.mappings.MappingParameters;
+import com.powsybl.dynawo.mappings.DynamicMappingExtensions;
+import com.powsybl.dynawo.mappings.DynamicSimulationSystems;
+import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
+import com.powsybl.dynawo.mappings.TapChangerBlockingsProviders;
+import com.powsybl.dynawo.models.BlackBoxModel;
+import com.powsybl.dynawo.parameters.ParametersSet;
+import com.powsybl.dynawo.xml.ParametersXml;
 import com.powsybl.iidm.network.Network;
+
+import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Map;
 import com.powsybl.python.commons.CTypeUtil;
 import com.powsybl.python.commons.Directives;
 import com.powsybl.python.commons.PyPowsyblApiHeader.ArrayPointer;
@@ -79,6 +93,251 @@ public final class DynamicSimulationCFunctions {
     public static ObjectHandle createDynamicModelMapping(IsolateThread thread,
             ExceptionHandlerPointer exceptionHandlerPtr) {
         return doCatch(exceptionHandlerPtr, () -> ObjectHandles.getGlobal().create(new PythonDynamicModelsSupplier()));
+    }
+
+    @CEntryPoint(name = "addMappingRecipe")
+    public static void addMappingRecipe(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                        CCharPointer mappingNamePtr,
+                                        CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                        CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                        ExceptionHandlerPointer exceptionHandlerPtr) {
+        // an explicit class rather than a lambda: the handles and the pointers are word values,
+        // which a lambda cannot capture
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                String mappingName = CTypeUtil.toString(mappingNamePtr);
+                // a recipe carries no network: it is the name of a registered mapping and the
+                // settings it takes, applied later against whatever network the models are asked
+                // for, so a mapping is named the same lazy way the dataframe adders already are
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                supplier.addMappingRecipe(mappingName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getDynamicMappingProviders")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        // one line per registered mapping, its name and its description tab apart, which is all
+        // that has to cross for a caller to see what it can be given and choose one
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicModelsMappings.getInstance().getMappingInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addSynchronousGeneratorProperties")
+    public static void addSynchronousGeneratorProperties(IsolateThread thread, ObjectHandle networkHandle,
+                                                         CCharPointer providerNamePtr,
+                                                         CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                         CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                // the controls a mapping reads are written here as a step of its own, from a named
+                // provider given the study's settings, so they can be set and looked at before a
+                // model is chosen for them. A machine already described is left as it is
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                SynchronousGeneratorPropertiesProviders.getInstance()
+                        .createExtensions(network, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getSynchronousGeneratorPropertiesProviders")
+    public static ArrayPointer<CCharPointerPointer> getSynchronousGeneratorPropertiesProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                SynchronousGeneratorPropertiesProviders.getInstance().getProviderInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addTapChangerBlockings")
+    public static void addTapChangerBlockings(IsolateThread thread, ObjectHandle networkHandle,
+                                              CCharPointer providerNamePtr,
+                                              CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                              CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                TapChangerBlockingsProviders.getInstance()
+                        .createExtensions(network, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getTapChangerBlockingsProviders")
+    public static ArrayPointer<CCharPointerPointer> getTapChangerBlockingsProviders(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                TapChangerBlockingsProviders.getInstance().getProviderInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addDynamicMappingExtensions")
+    public static void addDynamicMappingExtensions(IsolateThread thread, ObjectHandle networkHandle,
+                                                   CCharPointer extensionNamePtr, CCharPointer providerNamePtr,
+                                                   CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                   CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                   ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String extensionName = CTypeUtil.toString(extensionNamePtr);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                // the one door every kind of mapping extension is added through, the public methods
+                // and the RTE side running this underneath
+                DynamicMappingExtensions.getInstance()
+                        .createExtensions(network, extensionName, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getDynamicMappingExtensionNames")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingExtensionNames(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                new ArrayList<>(DynamicMappingExtensions.getInstance().getExtensionNames())));
+    }
+
+    @CEntryPoint(name = "getDynamicMappingExtensionProviders")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingExtensionProviders(IsolateThread thread,
+            CCharPointer extensionNamePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        // read the pointer before the lambda: a Word value captured in a lambda is not supported by
+        // native image, so the lambda closes over the String, not the pointer
+        String extensionName = CTypeUtil.toString(extensionNamePtr);
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicMappingExtensions.getInstance().getProviderInfos(extensionName).stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addDynamicSimulationExtensions")
+    public static void addDynamicSimulationExtensions(IsolateThread thread, ObjectHandle networkHandle,
+                                                      CCharPointer systemNamePtr,
+                                                      CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                      CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                      ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String systemName = CTypeUtil.toString(systemNamePtr);
+                // every extension a named system reads, added at once
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                DynamicSimulationSystems.getInstance()
+                        .createExtensions(network, systemName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getDynamicSimulationSystems")
+    public static ArrayPointer<CCharPointerPointer> getDynamicSimulationSystems(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicSimulationSystems.getInstance().getSystemInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "getMappedModels")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMappedModels(IsolateThread thread,
+                                                                                 ObjectHandle dynamicMappingHandle,
+                                                                                 ObjectHandle networkHandle,
+                                                                                 ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                List<BlackBoxModel> models = supplier.get(network, ReportNode.NO_OP).stream()
+                        .filter(BlackBoxModel.class::isInstance)
+                        .map(BlackBoxModel.class::cast)
+                        .toList();
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.mappedModelsDataFrameMapper(), models);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getMappedParameters")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMappedParameters(IsolateThread thread,
+                                                                                     ObjectHandle dynamicMappingHandle,
+                                                                                     ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Collection<ParametersSet> sets = supplier.getOrCreateMappingParameters().getModelParameters();
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.mappedParametersDataFrameMapper(), sets);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "loadMappedParameters")
+    public static void loadMappedParameters(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                            CCharPointer parametersFilePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                String parametersFile = CTypeUtil.toString(parametersFilePtr);
+                supplier.getOrCreateMappingParameters()
+                        .setModelsParameters(ParametersXml.load(Path.of(parametersFile)));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getParameterCompletions")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getParameterCompletions(IsolateThread thread,
+                                                                                         ObjectHandle dynamicMappingHandle,
+                                                                                         ObjectHandle networkHandle,
+                                                                                         ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                supplier.get(network, ReportNode.NO_OP);
+                return Dataframes.createCDataframe(DynamicSimulationDataframeMappersUtils.parameterCompletionsDataFrameMapper(),
+                        supplier.getCompletions());
+            }
+        });
+    }
+
+    @CEntryPoint(name = "updateMappedParameter")
+    public static void updateMappedParameter(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                             CCharPointer parameterSetIdPtr, CCharPointer parameterNamePtr,
+                                             CCharPointer valuePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                String parameterSetId = CTypeUtil.toString(parameterSetIdPtr);
+                String parameterName = CTypeUtil.toString(parameterNamePtr);
+                String value = CTypeUtil.toString(valuePtr);
+                // the change is made now if the set is there, or held until the recipe that writes
+                // it is applied to a network, so a value can be set before the mapping is resolved
+                supplier.updateParameterValue(parameterSetId, parameterName, value);
+            }
+        });
     }
 
     @CEntryPoint(name = "createTimeseriesMapping")
@@ -144,6 +403,19 @@ public final class DynamicSimulationCFunctions {
                 }
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
+                // the models are built first, so that the sets derived for them are known
+                dynamicMapping.get(network, reportNode);
+                // and what a model given after its parameters were written had added to value it is
+                // said on the report the run keeps, once, from the sets get() derived
+                ParameterCompletionReports.report(reportNode, dynamicMapping.getCompletions());
+                dynamicMapping.getMappingParameters().ifPresent(mappingParameters -> {
+                    DynawoSimulationParameters runParameters = dynamicMapping.getRunParameters();
+                    // detached from a run before it: these settings belong to the mapping and are
+                    // reused, but an extension holds to one extendable, so the same mapping run
+                    // again, a value changed between runs as in a sweep, would fail to attach them
+                    runParameters.setExtendable(null);
+                    dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
+                });
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -156,6 +428,25 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
+    @CEntryPoint(name = "updateDynamicMappings")
+    public static void updateDynamicMappings(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                             CCharPointer categoryNamePtr,
+                                             DataframeArrayPointer mappingDataframePtr,
+                                             int strict,
+                                             ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                // below zero the study said nothing and the configuration decides
+                supplier.setStrict(strict < 0 ? null : strict > 0);
+                addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
+                        PythonDynamicModelsSupplier.Mode.KEEP_LAST);
+
+            }
+        });
+    }
+
     @CEntryPoint(name = "addDynamicMappings")
     public static void addDynamicMappings(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                           CCharPointer categoryNamePtr,
@@ -164,15 +455,26 @@ public final class DynamicSimulationCFunctions {
         doCatch(exceptionHandlerPtr, new Runnable() {
             @Override
             public void run() {
-                String categoryName = CTypeUtil.toString(categoryNamePtr);
-                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
-                List<UpdatingDataframe> mappingDataframes = new ArrayList<>();
-                for (int i = 0; i < mappingDataframePtr.getDataframesCount(); i++) {
-                    mappingDataframes.add(createDataframe(mappingDataframePtr.getDataframes().addressOf(i)));
-                }
-                DynamicMappingHandler.addElements(categoryName, dynamicMapping, mappingDataframes);
+                addMappings(dynamicMappingHandle, categoryNamePtr, mappingDataframePtr,
+                        PythonDynamicModelsSupplier.Mode.KEEP_FIRST);
             }
         });
+    }
+
+    private static void addMappings(ObjectHandle dynamicMappingHandle, CCharPointer categoryNamePtr,
+                                    DataframeArrayPointer mappingDataframePtr, PythonDynamicModelsSupplier.Mode mode) {
+        String categoryName = CTypeUtil.toString(categoryNamePtr);
+        PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+        List<UpdatingDataframe> mappingDataframes = new ArrayList<>();
+        for (int i = 0; i < mappingDataframePtr.getDataframesCount(); i++) {
+            mappingDataframes.add(createDataframe(mappingDataframePtr.getDataframes().addressOf(i)));
+        }
+        dynamicMapping.setDefaultMode(mode);
+        try {
+            DynamicMappingHandler.addElements(categoryName, dynamicMapping, mappingDataframes);
+        } finally {
+            dynamicMapping.setDefaultMode(PythonDynamicModelsSupplier.Mode.KEEP_FIRST);
+        }
     }
 
     @CEntryPoint(name = "getDynamicMappingsMetaData")

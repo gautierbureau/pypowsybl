@@ -995,6 +995,40 @@ NadParameters* createNadParameters();
 //handle creation
 JavaHandle createDynamicSimulationContext();
 JavaHandle createDynamicModelMapping();
+
+void addMappingRecipe(JavaHandle dynamicMappingHandle, std::string mappingName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getDynamicMappingProviders();
+
+void addSynchronousGeneratorProperties(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getSynchronousGeneratorPropertiesProviders();
+
+void addTapChangerBlockings(JavaHandle networkHandle, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getTapChangerBlockingsProviders();
+
+void addDynamicSimulationExtensions(JavaHandle networkHandle, std::string systemName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getDynamicSimulationSystems();
+
+void addDynamicMappingExtensions(JavaHandle networkHandle, std::string extensionName, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getDynamicMappingExtensionNames();
+
+std::vector<std::string> getDynamicMappingExtensionProviders(std::string extensionName);
+
+SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
+
+SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle);
+
+SeriesArray* getParameterCompletions(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
+
+void updateMappedParameter(JavaHandle dynamicMappingHandle, std::string parameterSetId, std::string parameterName, std::string value);
+
+void loadMappedParameters(JavaHandle dynamicMappingHandle, std::string parametersFile);
+
+void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes, int strict);
 JavaHandle createTimeseriesMapping();
 JavaHandle createEventMapping();
 

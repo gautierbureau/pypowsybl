@@ -62,10 +62,12 @@ class DynamicModelsAdderTest {
         dataframe.addSeries(MODEL_NAME, false, new TestStringSeries(expectedModelName, ""));
         DynamicMappingHandler.addElements(category, dynamicModelsSupplier, List.of(dataframe));
 
+        // both rows describe the same equipment, and an equipment is described once: two models
+        // for one of them is what a mapping cannot hand to a simulation. The first stands, the
+        // adders describing what a mapping left out rather than what it covered
         assertThat(dynamicModelsSupplier.get(network)).satisfiesExactly(
-                model1 -> assertThat(model1).hasFieldOrPropertyWithValue("dynamicModelId", staticId)
-                        .hasFieldOrPropertyWithValue("lib", expectedModelName),
-                model2 -> assertThat(model2).hasFieldOrPropertyWithValue("dynamicModelId", staticId));
+                model -> assertThat(model).hasFieldOrPropertyWithValue("dynamicModelId", staticId)
+                        .hasFieldOrPropertyWithValue("lib", expectedModelName));
     }
 
     @ParameterizedTest(name = "{0}")

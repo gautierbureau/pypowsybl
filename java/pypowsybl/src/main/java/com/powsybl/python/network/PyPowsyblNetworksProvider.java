@@ -10,6 +10,7 @@ import com.powsybl.iidm.network.test.FourSubstationsNodeBreakerWithExtensionsFac
 import com.powsybl.iidm.network.impl.NetworkFactoryImpl;
 import com.powsybl.iidm.network.test.*;
 import com.powsybl.iidm.serde.test.MetrixTutorialSixBusesFactory;
+import com.powsybl.iidm.serde.test.Nordic32Factory;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -32,6 +33,7 @@ public class PyPowsyblNetworksProvider implements Networks.NetworksProvider {
             factory("ieee57", (Supplier<Network>) IeeeCdfNetworkFactory::create57),
             factory("ieee118", (Supplier<Network>) IeeeCdfNetworkFactory::create118),
             factory("ieee300", (Supplier<Network>) IeeeCdfNetworkFactory::create300),
+            factory("nordic32", (Supplier<Network>) Nordic32Factory::create),
             factory("micro_grid_be", () -> importCgmes(CgmesConformity1Catalog.microGridBaseCaseBE())),
             factory("micro_grid_nl", () -> importCgmes(CgmesConformity1Catalog.microGridBaseCaseNL())),
             factory("four_substations_node_breaker", (Supplier<Network>) FourSubstationsNodeBreakerFactory::create),

@@ -87,6 +87,9 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     set(NATIVE_IMAGE_BUILD_OPTIONS "-H:GenerateDebugInfo=1" "-Ob")
 endif()
 
+# cap the native-image builder heap: unbounded it grabs 25% of RAM and gets OOM-killed on this machine
+list(APPEND NATIVE_IMAGE_BUILD_OPTIONS "-J-Xmx8g")
+
 # as of GraalVM 23.0.0 G1 GC is only supported on Linux ADM64
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND ${OS_BITS} STREQUAL "64")
     set(NATIVE_IMAGE_GC "G1")

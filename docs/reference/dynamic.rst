@@ -46,6 +46,20 @@ ModelMapping
     ModelMapping.add_tap_changer_automation_system
     ModelMapping.add_tap_changer_blocking_automation_system
 
+Simulation extensions
+---------------------
+Add the extensions a network needs before a mapping, from named providers.
+
+.. autosummary::
+    :toctree: api/
+
+    add_synchronous_generator_properties
+    get_synchronous_generator_properties_providers
+    add_tap_changer_blockings
+    get_tap_changer_blockings_providers
+    add_dynamic_simulation_extensions
+    get_dynamic_simulation_systems
+
 EventMapping
 ------------
 .. autosummary::
