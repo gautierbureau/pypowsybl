@@ -11,6 +11,9 @@ from .impl.simulation import Simulation
 from .impl.parameters import Parameters
 from .impl.model_mapping import ModelMapping
 from .impl.extensions import (
+    add_extensions,
+    get_extension_names,
+    get_extension_providers,
     add_synchronous_generator_properties,
     get_synchronous_generator_properties_providers,
     add_tap_changer_blockings,

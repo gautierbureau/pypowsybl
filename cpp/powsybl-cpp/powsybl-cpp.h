@@ -1009,6 +1009,12 @@ void addDynamicSimulationExtensions(JavaHandle networkHandle, std::string system
 
 std::vector<std::string> getDynamicSimulationSystems();
 
+void addDynamicMappingExtensions(JavaHandle networkHandle, std::string extensionName, std::string providerName, const std::map<std::string, std::string>& parameters);
+
+std::vector<std::string> getDynamicMappingExtensionNames();
+
+std::vector<std::string> getDynamicMappingExtensionProviders(std::string extensionName);
+
 SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
 
 SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle);

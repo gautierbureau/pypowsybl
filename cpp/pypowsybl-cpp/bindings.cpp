@@ -217,6 +217,11 @@ void dynamicSimulationBindings(py::module_& m) {
     m.def("add_tap_changer_blockings", &pypowsybl::addTapChangerBlockings, py::arg("network_handle"),
           py::arg("provider_name"), py::arg("parameters"));
     m.def("get_tap_changer_blockings_providers", &pypowsybl::getTapChangerBlockingsProviders);
+    m.def("add_dynamic_mapping_extensions", &pypowsybl::addDynamicMappingExtensions, py::arg("network_handle"),
+          py::arg("extension_name"), py::arg("provider_name"), py::arg("parameters"));
+    m.def("get_dynamic_mapping_extension_names", &pypowsybl::getDynamicMappingExtensionNames);
+    m.def("get_dynamic_mapping_extension_providers", &pypowsybl::getDynamicMappingExtensionProviders,
+          py::arg("extension_name"));
     m.def("add_dynamic_simulation_extensions", &pypowsybl::addDynamicSimulationExtensions, py::arg("network_handle"),
           py::arg("system_name"), py::arg("parameters"));
     m.def("get_dynamic_simulation_systems", &pypowsybl::getDynamicSimulationSystems);

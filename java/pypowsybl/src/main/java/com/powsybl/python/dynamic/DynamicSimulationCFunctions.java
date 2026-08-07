@@ -48,6 +48,7 @@ import com.powsybl.dynamicsimulation.EventModelsSupplier;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.mappings.DynamicModelsMappings;
 import com.powsybl.dynawo.mappings.MappingParameters;
+import com.powsybl.dynawo.mappings.DynamicMappingExtensions;
 import com.powsybl.dynawo.mappings.DynamicSimulationSystems;
 import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
 import com.powsybl.dynawo.mappings.TapChangerBlockingsProviders;
@@ -183,6 +184,47 @@ public final class DynamicSimulationCFunctions {
             ExceptionHandlerPointer exceptionHandlerPtr) {
         return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
                 TapChangerBlockingsProviders.getInstance().getProviderInfos().stream()
+                        .map(info -> info.name() + "\t" + info.description())
+                        .toList()));
+    }
+
+    @CEntryPoint(name = "addDynamicMappingExtensions")
+    public static void addDynamicMappingExtensions(IsolateThread thread, ObjectHandle networkHandle,
+                                                   CCharPointer extensionNamePtr, CCharPointer providerNamePtr,
+                                                   CCharPointerPointer parameterNamesPtr, int parameterNamesCount,
+                                                   CCharPointerPointer parameterValuesPtr, int parameterValuesCount,
+                                                   ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                Network network = ObjectHandles.getGlobal().get(networkHandle);
+                String extensionName = CTypeUtil.toString(extensionNamePtr);
+                String providerName = CTypeUtil.toString(providerNamePtr);
+                Map<String, String> settings = CTypeUtil.toStringMap(parameterNamesPtr, parameterNamesCount,
+                        parameterValuesPtr, parameterValuesCount);
+                // the one door every kind of mapping extension is added through, the public methods
+                // and the RTE side running this underneath
+                DynamicMappingExtensions.getInstance()
+                        .createExtensions(network, extensionName, providerName, MappingParameters.of(settings));
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getDynamicMappingExtensionNames")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingExtensionNames(IsolateThread thread,
+            ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                new ArrayList<>(DynamicMappingExtensions.getInstance().getExtensionNames())));
+    }
+
+    @CEntryPoint(name = "getDynamicMappingExtensionProviders")
+    public static ArrayPointer<CCharPointerPointer> getDynamicMappingExtensionProviders(IsolateThread thread,
+            CCharPointer extensionNamePtr, ExceptionHandlerPointer exceptionHandlerPtr) {
+        // read the pointer before the lambda: a Word value captured in a lambda is not supported by
+        // native image, so the lambda closes over the String, not the pointer
+        String extensionName = CTypeUtil.toString(extensionNamePtr);
+        return doCatch(exceptionHandlerPtr, () -> Util.createCharPtrArray(
+                DynamicMappingExtensions.getInstance().getProviderInfos(extensionName).stream()
                         .map(info -> info.name() + "\t" + info.description())
                         .toList()));
     }
