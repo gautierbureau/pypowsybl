@@ -25,3 +25,6 @@ from .impl.model_config import ModelConfig
 from .impl.criteria import Criteria
 from .impl.security_analysis import DynamicSecurityAnalysis
 from .impl.security_analysis_parameters import DynamicSecurityAnalysisParameters
+from .impl.loads_variation import LoadsVariationMapping
+from .impl.margin_calculation_parameters import MarginCalculationParameters, CalculationType, LoadModelsRule
+from .impl.margin_calculation import MarginCalculation, MarginCalculationResult
