@@ -34,6 +34,7 @@ Both parallelism flavours behave the same and plateau at ~2.9x on 4 vCPUs:
 Ranked causes, most to least costly:
 
 1. every load flow runs on `ForkJoinPool.commonPool()`, capped at `availableProcessors - 1`,
+   because pypowsybl builds its computation manager with `LocalComputationManager.getDefault()`,
 2. `update_generators` is ~90% Python/pandas under the GIL and *anti-scales* (0.54x on 4 threads),
 3. the OpenLoadFlow network cache scans its entries linearly under one process-wide lock,
 4. the pypowsybl per-call machinery takes two global mutexes and two GIL acquisitions per call,
@@ -44,12 +45,17 @@ listener notification (flat with the number of cached variants).
 
 ## 1. Every load flow runs on the common ForkJoinPool
 
-`OpenLoadFlowProvider.run` (`OpenLoadFlowProvider.java:294`) submits with
-`CompletableFuture.supplyAsync(() -> …)` **without an executor**, so the work lands on
-`ForkJoinPool.commonPool()`. The blocking path goes there too, because
-`LoadFlow.Runner.run` (`LoadFlow.java:140`) is `runAsync(...).join()`. The
-`ComputationManager` that pypowsybl builds in `CommonObjects` is passed down and never used
-as the executor.
+OpenLoadFlow does the right thing: `OpenLoadFlowProvider.run` submits with
+`CompletableFuture.supplyAsync(supplier, computationManager.getExecutor())`
+(`OpenLoadFlowProvider.java:310`), and the blocking path goes through it as well, since
+`LoadFlow.Runner.run` (`LoadFlow.java:140`) is `runAsync(...).join()`.
+
+The cap comes from the executor it is handed. `CommonObjects.getComputationManager()` uses
+`LocalComputationManager.getDefault()`, and `LocalComputationManager`'s default executor is
+`ForkJoinPool.commonPool()` (`LocalComputationManager.java:105`) - whose parallelism is
+`availableProcessors - 1`. The `available-core` property of the `local-computation-manager`
+module does not help: it only sizes a semaphore used for external process execution, not the
+executor.
 
 Measured (`scaling_bottlenecks.py`, item 7): with **8 Python worker threads on 4 CPUs the
 process has exactly 3 `commonPool-worker` threads** — `availableProcessors - 1`. That is the
@@ -69,8 +75,8 @@ GRAALVM_OPTIONS="-Djava.util.concurrent.ForkJoinPool.common.parallelism=16" pyth
 ```
 
 Verified working (8 `commonPool-worker` threads appear), but it changes nothing on 4 CPUs
-(516 vs 502 LF/s at 4 workers, within noise). The real fix is upstream: honour
-`computationManager.getExecutor()` in `OpenLoadFlowProvider.run`.
+(516 vs 502 LF/s at 4 workers, within noise). The fix is in pypowsybl: build the computation
+manager with a dedicated pool, sized from `available-core` and defaulting to all cores.
 
 ## 2. `update_generators` is GIL-bound and anti-scales
 
@@ -191,8 +197,10 @@ touch a variant-per-worker scenario.
 
 ## What to fix, in order
 
-1. **powsybl-open-loadflow**: pass `computationManager.getExecutor()` to `supplyAsync` in
-   `OpenLoadFlowProvider.run`. Decides whether 32 workers can ever use 32 cores.
+1. **pypowsybl java**: give `CommonObjects` a dedicated `ForkJoinPool` instead of the
+   default `LocalComputationManager`, which runs everything on the common pool. Decides
+   whether 32 workers can ever use 32 cores, and stops load flows from competing with the
+   parallel streams of the calling application.
 2. **powsybl-open-loadflow**: key `NetworkCache` entries by (network, variant) and drop the
    process-wide lock to a per-network one.
 3. **pypowsybl Python**: memoize the dataframe metadata and add a pandas-free kwargs path in
