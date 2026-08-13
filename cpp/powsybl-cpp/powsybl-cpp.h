@@ -80,6 +80,31 @@ T callJava(F f, ARGS... args) {
     return r;
 }
 
+/**
+ * Same as callJava<T*>, but the returned pointer is wrapped in a shared_ptr whose deleter calls
+ * back into the matching java free entry point. Memory allocated on java side (UnmanagedMemory)
+ * is not reclaimed by the GC: it can only be released that way.
+ *
+ * The raw pointer never escapes, so a call site cannot obtain it without naming its free function
+ * in the same expression.
+ */
+template<typename T, typename F, typename FreeF, typename... ARGS>
+std::shared_ptr<T> callJavaOwned(F f, FreeF freeF, ARGS... args) {
+    T* ptr = callJava<T*>(f, args...);
+    if (ptr == nullptr) {
+        return nullptr;
+    }
+    // the singleton is re-fetched inside the deleter: the free may run much later, on another
+    // thread (python GC), so `this` must not be captured.
+    return std::shared_ptr<T>(ptr, [freeF](T* p) {
+        try {
+            PowsyblCaller::get()->callJava(freeF, p);
+        } catch (const std::exception&) {
+            // an exception escaping a deleter would call std::terminate
+        }
+    });
+}
+
 void setPreprocessingJavaCall(std::function <void(GraalVmGuard* guard, exception_handler* exc)> func);
 void setPostProcessingJavaCall(std::function<void()> func);
 
@@ -91,6 +116,42 @@ std::function <void(GraalVmGuard* guard, exception_handler* exc)> beginCall_;
 std::function <void()> endCall_;
 
 };
+
+/**
+ * Deleter for java allocated structs that are consumed and released inside a single C++ scope.
+ * Zero overhead (no control block), unlike callJavaOwned.
+ */
+template<auto FreeFn>
+struct JavaDeleter {
+    template<typename T>
+    void operator()(T* ptr) const {
+        if (ptr) {
+            try {
+                PowsyblCaller::get()->callJava(FreeFn, ptr);
+            } catch (const std::exception&) {
+                // an exception escaping a deleter would call std::terminate
+            }
+        }
+    }
+};
+
+template<typename T, auto FreeFn>
+using JavaUnique = std::unique_ptr<T, JavaDeleter<FreeFn>>;
+
+/**
+ * Allocates a struct on the C++ heap and binds its release (nested members first, then the struct
+ * itself) to its lifetime. Used by the to_c_struct() builders: unlike callJavaOwned, nothing calls
+ * back into java here. Wrapping before filling the struct also makes the fill exception safe, the
+ * value initialization above leaving the not yet filled members null.
+ */
+template<typename T, typename DeleteMembersF>
+std::shared_ptr<T> newCOwned(DeleteMembersF deleteMembers) {
+    T* res = new T();
+    return std::shared_ptr<T>(res, [deleteMembers](T* ptr) {
+        deleteMembers(ptr);
+        delete ptr;
+    });
+}
 
 template<typename T>
 class ToPtr {
