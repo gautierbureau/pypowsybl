@@ -22,10 +22,19 @@ public:
 private:
     py::object logger_;
     std::mutex loggerMutex_;
-
-    static CppToPythonLogger* singleton_;
-    static std::mutex initMutex_;
 };
+
+// Log level of the python logger, cached so that java calls do not have to acquire the GIL to read
+// it. Negative when no logger is set. refreshCachedPythonLogLevel must be called with the GIL held.
+int cachedPythonLogLevel();
+
+void refreshCachedPythonLogLevel();
+
+// Marked by the callbacks running python code while a java call is in progress, so that the
+// post-call hook only looks for a pending python error when one of them has actually run.
+void markPythonCallbackRun();
+
+bool takePythonCallbackRun();
 
 void logFromJava(int level, long timestamp, char* loggerName, char* message);
 

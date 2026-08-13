@@ -11,9 +11,6 @@
 
 namespace pypowsybl {
 
-std::mutex PowsyblCaller::initMutex_;
-PowsyblCaller *PowsyblCaller::singleton_ = nullptr;
-
 graal_isolate_t* isolate = nullptr;
 std::vector<char*> argv;
 
@@ -42,12 +39,10 @@ GraalVmGuard::~GraalVmGuard() noexcept(false) {
         }
     }
 }
+// function local static: initialized once, thread safely, without locking on every java call
 PowsyblCaller* PowsyblCaller::get() {
-    std::lock_guard<std::mutex> guard(initMutex_);
-    if (!singleton_) {
-        singleton_ = new PowsyblCaller();
-    }
-    return singleton_;
+    static PowsyblCaller singleton;
+    return &singleton;
 }
 
 void PowsyblCaller::setPreprocessingJavaCall(std::function <void(GraalVmGuard* guard, exception_handler* exc)> func) {

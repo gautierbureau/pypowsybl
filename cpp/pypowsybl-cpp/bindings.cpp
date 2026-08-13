@@ -313,6 +313,11 @@ PYBIND11_MODULE(_pypowsybl, m) {
       setLogLevelFromPythonLogger(guard, exc);
     };
     auto postJavaCall = [](){
+      // only python callbacks running during the java call can have set an error: skip the GIL
+      // acquisition, on every single java call, when none has run
+      if (!takePythonCallbackRun()) {
+        return;
+      }
       py::gil_scoped_acquire acquire;
       if (PyErr_Occurred() != nullptr) {
         throw py::error_already_set();
@@ -1496,6 +1501,7 @@ PYBIND11_MODULE(_pypowsybl, m) {
 
 void onLoadFlowResult(array* resultsPtr, void* resultFuturePtr) {
     py::gil_scoped_acquire acquire;
+    markPythonCallbackRun();
     py::object resultsFuture = py::reinterpret_steal<py::object>((PyObject*) resultFuturePtr); // automatically decrease ref counter
     try {
         resultsFuture.attr("set_results")(new pypowsybl::LoadFlowComponentResultArray(resultsPtr));
@@ -1506,6 +1512,7 @@ void onLoadFlowResult(array* resultsPtr, void* resultFuturePtr) {
 
 void onLoadFlowException(const char* message, void* resultFuturePtr) {
     py::gil_scoped_acquire acquire;
+    markPythonCallbackRun();
     py::object resultsFuture = py::reinterpret_steal<py::object>((PyObject*) resultFuturePtr); // automatically decrease ref counter
     try {
         resultsFuture.attr("set_exception_message")(message);
@@ -1533,13 +1540,25 @@ void runLoadFlowAsyncPython(const pypowsybl::JavaHandle& network, const std::str
                                               (void*) resultsFuturePtr);
 }
 
+namespace {
+
+// level already pushed to java by this thread; thread local so that the check costs no shared state
+thread_local int lastPushedLogLevel = -1;
+
+}
+
 void setLogLevelFromPythonLogger(pypowsybl::GraalVmGuard* guard, exception_handler* exc) {
-    py::object logger = CppToPythonLogger::get()->getLogger();
-    if (!logger.is_none()) {
-        py::gil_scoped_acquire acquire;
-        py::object level = logger.attr("level");
-        ::setLogLevel(guard->thread(), level.cast<int>(), exc);
-     }
+    // Reading logger.level needs the GIL, and this runs before every single java call: refresh the
+    // cached level only when the calling thread already holds the GIL (which the calls not releasing
+    // it do, and setLogger does at startup), and push it to java only when it has changed.
+    if (PyGILState_Check()) {
+        refreshCachedPythonLogLevel();
+    }
+    int level = cachedPythonLogLevel();
+    if (level >= 0 && level != lastPushedLogLevel) {
+        ::setLogLevel(guard->thread(), level, exc);
+        lastPushedLogLevel = level;
+    }
 }
 
 pypowsybl::JavaHandle loadNetworkFromBinaryBuffersPython(std::vector<py::buffer> byteBuffers, const std::map<std::string, std::string>& parameters,
