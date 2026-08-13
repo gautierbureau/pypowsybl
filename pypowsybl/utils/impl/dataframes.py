@@ -11,11 +11,21 @@ Provides utility methods for dataframes handling:
  - creation of C API dataframes
  - ...
 """
+from functools import lru_cache as _lru_cache
 from typing import Optional as _Optional, Any as _Any, Dict as _Dict, List
 from pandas import DataFrame, Index, MultiIndex
 import numpy as np
 from numpy.typing import ArrayLike as _ArrayLike
 import pypowsybl._pypowsybl as _pp
+
+
+@_lru_cache(maxsize=None)
+def get_network_elements_metadata(element_type: _pp.ElementType) -> List[_pp.SeriesMetadata]:
+    """
+    Series metadata of an element type, memoized: it is fixed for a given element type, while
+    fetching it is a java call made on every read or update with keyword arguments.
+    """
+    return _pp.get_network_elements_dataframe_metadata(element_type)
 
 
 def _to_array(value: _Any) -> np.ndarray:
@@ -108,6 +118,59 @@ def _create_c_dataframe(df: DataFrame, series_metadata: List[_pp.SeriesMetadata]
             columns_values.append(series.values)
         is_index.append(False)
     return _pp.create_dataframe(columns_values, columns_names, columns_types, is_index)
+
+
+def _create_c_dataframe_from_kwargs(metadata: List[_pp.SeriesMetadata], **kwargs: _Any) -> _pp.Dataframe:
+    """
+    Creates the C representation of a dataframe directly from named arguments.
+
+    Same result as `_create_c_dataframe(_adapt_kwargs(metadata, **kwargs), metadata)`, without
+    building the intermediate pandas dataframe: on small updates the pandas round trip costs an
+    order of magnitude more than the update itself, and it runs with the GIL held.
+    """
+    metadata_by_name = {s.name: s for s in metadata}
+    columns = {}
+    expected_size = None
+    for name, value in kwargs.items():
+        if value is None:
+            continue
+        if name not in metadata_by_name:
+            raise ValueError(f'No column named {name}')
+        column = _to_array(value)
+        size = column.shape[0]
+        if expected_size is None:
+            expected_size = size
+        elif size != expected_size:
+            raise ValueError(f'Network elements update: all arguments must have the same size, '
+                             f'got size {size} for series {name}, expected {expected_size}')
+        if column.dtype == bool:
+            # the C layer expects integers for boolean series
+            column = column.astype(int)
+        columns[name] = column
+
+    # index columns first, in metadata order, as the pandas path does
+    index_names = [s.name for s in metadata if s.is_index]
+    for index_name in index_names:
+        if index_name not in columns:
+            raise ValueError('No data provided for index: ' + index_name)
+    names = index_names + [name for name in columns if name not in index_names]
+    return _pp.create_dataframe([columns[name] for name in names],
+                                names,
+                                [metadata_by_name[name].type for name in names],
+                                [name in index_names for name in names])
+
+
+def _create_c_dataframe_from_df_or_kwargs(metadata: List[_pp.SeriesMetadata], df: _Optional[DataFrame] = None,
+                                          **kwargs: _Any) -> _pp.Dataframe:
+    """
+    Creates the C representation of a dataframe, either from a ready to use dataframe, or directly
+    from keyword arguments.
+    """
+    if df is None:
+        return _create_c_dataframe_from_kwargs(metadata, **kwargs)
+    if kwargs:
+        raise RuntimeError('You must provide data in only one form: dataframe or named arguments')
+    return _create_c_dataframe(df, metadata)
 
 
 def _find_index_in_metadata(series_metadata: List[_pp.SeriesMetadata]) -> _pp.SeriesMetadata:

@@ -34,6 +34,8 @@ from pypowsybl._pypowsybl import ElementType, ValidationLevel
 from pypowsybl.utils import (
     _adapt_df_or_kwargs,
     _create_c_dataframe,
+    _create_c_dataframe_from_df_or_kwargs,
+    get_network_elements_metadata,
     _create_properties_c_dataframe,
     _adapt_properties_kwargs,
     _get_c_dataframes,
@@ -741,9 +743,8 @@ class Network:  # pylint: disable=too-many-public-methods
             raise RuntimeError('parameters "all_attributes" and "attributes" are mutually exclusive')
 
         if kwargs:
-            metadata = _pp.get_network_elements_dataframe_metadata(element_type)
-            df = _adapt_df_or_kwargs(metadata, None, **kwargs)
-            elements_array = _create_c_dataframe(df, metadata)
+            metadata = get_network_elements_metadata(element_type)
+            elements_array = _create_c_dataframe_from_df_or_kwargs(metadata, None, **kwargs)
 
         else:
             elements_array = None
@@ -3437,9 +3438,8 @@ class Network:  # pylint: disable=too-many-public-methods
                     Arguments can be single values or any type of sequence.
                     In the case of sequences, all arguments must have the same length.
         """
-        metadata = _pp.get_network_elements_dataframe_metadata(element_type)
-        df = _adapt_df_or_kwargs(metadata, df, **kwargs)
-        c_df = _create_c_dataframe(df, metadata)
+        metadata = get_network_elements_metadata(element_type)
+        c_df = _create_c_dataframe_from_df_or_kwargs(metadata, df, **kwargs)
         _pp.update_network_elements_with_series(self._handle, c_df, element_type, self._per_unit,
                                                 self._nominal_apparent_power)
 
