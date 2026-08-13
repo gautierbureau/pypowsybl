@@ -1,5 +1,8 @@
 # Parallel load flow scaling benchmarks
 
+`scaling-analysis.md` holds the full analysis of what limits thread scaling and where in the
+stack it lives; `scaling_bottlenecks.py` is the script that measures it phase by phase.
+
 Two independent scripts measuring how parallel load flows on network variants scale with
 the number of workers, on the same scenario:
 
