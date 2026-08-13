@@ -217,3 +217,10 @@ touch a variant-per-worker scenario.
 cap (3) nearly coincide. All three scripts take `--workers` / `--total-lf` / `--csv`, so
 re-running them on a larger machine is the natural next step — item 1 in particular should
 become dramatic there.
+
+## Correction
+
+An earlier revision of this document attributed the common pool cap to
+`OpenLoadFlowProvider.run` submitting without an executor. That is wrong: it does pass
+`computationManager.getExecutor()`. The cap is real, but it comes from the executor
+pypowsybl hands it, as described in section 1.
