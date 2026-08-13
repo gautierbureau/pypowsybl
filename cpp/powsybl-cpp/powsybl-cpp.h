@@ -56,7 +56,9 @@ static PowsyblCaller* get();
 template<typename F, typename... ARGS>
 void callJava(F f, ARGS... args) {
     GraalVmGuard guard;
-    exception_handler exc;
+    // zero initialized: not every java entry point goes through Util.doCatch, which is what nulls
+    // the message, so an uninitialized pointer here would be read - and freed - as an exception
+    exception_handler exc = {};
 
     beginCall_(&guard, &exc);
     f(guard.thread(), args..., &exc);
@@ -69,7 +71,9 @@ void callJava(F f, ARGS... args) {
 template<typename T, typename F, typename... ARGS>
 T callJava(F f, ARGS... args) {
     GraalVmGuard guard;
-    exception_handler exc;
+    // zero initialized: not every java entry point goes through Util.doCatch, which is what nulls
+    // the message, so an uninitialized pointer here would be read - and freed - as an exception
+    exception_handler exc = {};
 
     beginCall_(&guard, &exc);
     auto r = f(guard.thread(), args..., &exc);
@@ -85,8 +89,6 @@ void setPostProcessingJavaCall(std::function<void()> func);
 
 private:
 
-static PowsyblCaller* singleton_;
-static std::mutex initMutex_;
 std::function <void(GraalVmGuard* guard, exception_handler* exc)> beginCall_;
 std::function <void()> endCall_;
 

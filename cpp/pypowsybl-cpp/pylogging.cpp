@@ -6,19 +6,43 @@
  */
 #include "pylogging.h"
 #include "powsybl-cpp.h"
+#include <atomic>
 #include <iostream>
 
 using namespace pybind11::literals;
 
-CppToPythonLogger *CppToPythonLogger::singleton_ = nullptr;
-std::mutex CppToPythonLogger::initMutex_;
+namespace {
 
+std::atomic<int> cachedLogLevel(-1);
+
+// consumed by the post-call hook of the calling thread; python errors are per thread anyway
+thread_local bool pythonCallbackRun = false;
+
+}
+
+// function local static: initialized once, thread safely, without locking on every call
 CppToPythonLogger* CppToPythonLogger::get() {
-    std::lock_guard<std::mutex> guard(initMutex_);
-    if (!singleton_) {
-        singleton_ = new CppToPythonLogger();
-    }
-    return singleton_;
+    static CppToPythonLogger singleton;
+    return &singleton;
+}
+
+int cachedPythonLogLevel() {
+    return cachedLogLevel.load(std::memory_order_relaxed);
+}
+
+void refreshCachedPythonLogLevel() {
+    py::object logger = CppToPythonLogger::get()->getLogger();
+    cachedLogLevel.store(logger.is_none() ? -1 : logger.attr("level").cast<int>(), std::memory_order_relaxed);
+}
+
+void markPythonCallbackRun() {
+    pythonCallbackRun = true;
+}
+
+bool takePythonCallbackRun() {
+    bool run = pythonCallbackRun;
+    pythonCallbackRun = false;
+    return run;
 }
 
 CppToPythonLogger::CppToPythonLogger()
@@ -50,6 +74,7 @@ struct save_python_error {
 
 void logFromJava(int level, long timestamp, char* loggerName, char* message) {
     py::gil_scoped_acquire acquire;
+    markPythonCallbackRun();
     save_python_error previousError;  // to keep and restore the previously set exception, if any
     py::object logger = CppToPythonLogger::get()->getLogger();
     if (!logger.is_none()) {
@@ -64,6 +89,7 @@ void logFromJava(int level, long timestamp, char* loggerName, char* message) {
 
 void setLogger(py::object& logger) {
     CppToPythonLogger::get()->setLogger(logger);
+    refreshCachedPythonLogLevel(); // called from python, the GIL is held
     auto fptr = &::logFromJava;
     pypowsybl::setupLoggerCallback(reinterpret_cast<void *&>(fptr));
 }
