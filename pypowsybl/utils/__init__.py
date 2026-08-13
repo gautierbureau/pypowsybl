@@ -7,5 +7,7 @@
 #
 from .impl.util import (path_to_str, create_data_frame_from_series_array, PathOrStr)
 from .impl.dataframes import (_to_array, _adapt_kwargs, _adapt_df_or_kwargs, _create_c_dataframe,
+                              _create_c_dataframe_from_df_or_kwargs, _create_c_dataframe_from_kwargs,
+                              get_network_elements_metadata,
                               _find_index_in_metadata, _add_index_to_kwargs, _create_properties_c_dataframe,
                               _adapt_properties_kwargs, _get_c_dataframes)
