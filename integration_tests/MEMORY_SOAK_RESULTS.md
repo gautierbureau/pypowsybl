@@ -100,24 +100,31 @@ is alive.
 
 ### Measured impact
 
-Alternating a single parameter (`distributed_slack`) between runs on one
-long-lived IEEE300 network, under `-Xmx1G`:
+The dominant symptom is CPU, not memory. Every write-back a loadflow performs on
+the network (bus V/angle, branch P/Q) notifies the whole listener list, so the
+cost per run grows linearly with the number of leaked listeners.
 
-| | 2000 iterations | RSS slope | Wall time |
-|---|---|---|---|
-| alternating parameters | 200 entries created / 199 evicted per 200 runs | 2.16 kB/it | **151.6 s** |
-| fixed parameters (control) | 1 entry created, reused | 1.68 kB/it | **12.1 s** |
+Alternating a single parameter (`distributed_slack`) between runs on one
+long-lived IEEE300 network, under `-Xmx1G`, time per 250 iterations climbed
+7.2 → 10.8 → 13.8 → 17.1 → 20.4 → 24.1 → 27.6 → 30.6 s. Within a single run the
+work per iteration is constant, so that growth is itself the leak signature.
 
 Logging confirms the accumulation directly: 200 iterations produce 200
 "Network cache created" and 199 "Network cache evicted" messages, i.e. ~200
 leaked listeners.
 
-The dominant symptom is CPU, not memory. Every write-back a loadflow performs on
-the network (bus V/angle, branch P/Q) notifies the whole listener list, so the
-cost per run grows linearly with the number of leaked listeners. Time per 250
-iterations climbed 7.2 → 10.8 → 13.8 → 17.1 → 20.4 → 24.1 → 27.6 → 30.6 s while
-the control stayed flat at ~1.5 s — overall O(n²), already 12.5× slower after
-only 2000 runs and still diverging.
+The fix was measured separately, in Java, on the same machine with the fix as
+the only variable (2000 alternating runs, sparse matrix factory): per-block time
+went from 8131 → 16134 ms (+98%, monotonic after warmup) without the fix to a
+flat 5.1–5.8 s with it; 95.3 s versus 48.4 s in total. See
+`docs/memory-investigation/README.md` in powsybl-open-loadflow.
+
+**Do not compare alternating parameters against fixed parameters to size this
+leak.** An earlier version of this file did, quoting 151.6 s versus 12.1 s. That
+comparison varies two things at once: fixed parameters get cache hits (fast
+restart, a few ms per run) while alternating parameters rebuild the `LfNetwork`
+at every run. Most of that gap is cache miss versus cache hit, not leaked
+listeners, and neither side of it had the fix applied.
 
 Note this is a *different* code path from the 1.45 kB/it drift in case 2 above:
 with fixed parameters the entry is created once and reused (verified: 2 created,
