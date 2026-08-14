@@ -224,13 +224,86 @@ touch a variant-per-worker scenario.
 5. **pypowsybl C++**: release the GIL on the variant calls (PR #15 style).
 6. **powsybl-core**: make variant creation thread safe (core PRs #34 / #50).
 
+## Results on 20 threads
+
+The 4 vCPU caveat below is now resolved: the same benchmarks were re-run on an i7-13700H
+(6 P-cores + 8 E-cores, 20 threads), ieee300, `networkCacheEnabled=true`, 2048 load flows
+per point, best of 2.
+
+| build | flavour | peak | speedup | cores busy | limited by |
+|---|---|---:|---:|---:|---|
+| released 1.16.1 | asyncio | 1389 LF/s @16 | 5.8x | 8.7 | event loop at 0.95 |
+| released 1.16.1 | thread pool, variants | **fails** | – | – | `Variant index not set for current thread` |
+| released 1.16.1 | thread pool, one network per thread | 848 LF/s @24 | 3.3x | 6.0 | per-call GIL and isolate attach |
+| all fixes | asyncio | 1488 LF/s @16 | 5.4x | 10.3 | event loop at 0.85 |
+| all fixes | thread pool, variants | **1830 LF/s @16-20** | **6.3x** | **13.5** | GIL in the update path, E-cores |
+
+"all fixes" is the concurrency fix of this branch plus the pandas-free update path, the
+per-call machinery and the dedicated computation pool, built as a GraalVM native image
+against a patched OpenLoadFlow (see the crash below).
+
+What this settles:
+
+* **the asyncio ceiling is real and it is the event loop.** From 10 workers on, the loop
+  thread burns 93-95% of a core while only 8.7 of 20 threads are busy, and throughput stops
+  at 5.8x. Predicted from the 4 vCPU box as "~20% serial fraction, so around 5x"; measured
+  5.8x. Running with `--gens 1` (a tenth of the dataframe work) moves the peak by 5%, so the
+  serial cost is the async round trip itself - future, threadsafe callback, GIL hand-offs -
+  not the update;
+* **threads break through that ceiling, but only with the fixes.** On the released build a
+  thread pool is *worse* than asyncio (3.3x, 6 cores) because every call pays isolate
+  attach/detach, two global mutexes and two GIL acquisitions, and those costs multiply with
+  the thread count; with the fixes it reaches 6.3x and 13.5 busy threads, 30% above asyncio;
+* single worker throughput also improves, 241 -> 288 LF/s, from the update and per-call work;
+* on a 6 P-core + 8 E-core CPU the practical ceiling is around 10x, not 20x, so 6.3x is
+  roughly 60% of what the silicon can give. The remaining loss is GIL time in the python side
+  of the update path and E-core throughput.
+
+### A crash, and a second one
+
+With the released OpenLoadFlow, the thread pool sweep fails with
+`java.util.ConcurrentModificationException` raised inside `run_loadflow`, reproducibly:
+three sweeps out of three. It disappears with `networkCacheEnabled=false`, which points at
+the cache path. Building OpenLoadFlow with
+[PR #64](https://github.com/gautierbureau/powsybl-open-loadflow/pull/64) - cache entries keyed
+by (network, variant) instead of a list scanned without the lock - removes it: two full thread
+pool sweeps and three asyncio sweeps run clean.
+
+One asyncio sweep out of six still hit the same exception afterwards, so a second race
+remains. The prime suspect is `VariantManagerImpl` in powsybl-core, which has no locking at
+all, exercised by the cached load flow path creating and removing a temporary variant per run
+(`LfNetworkList.DefaultVariantCleaner`). It could not be reproduced from pure java (16 threads
+x 200 runs, and variant churn rounds, all clean), so it needs the pypowsybl call pattern.
+
+### Comparison with the parallel_loadflow_*.py sweep scripts
+
+Two scripts written in another session run the same family of scenario sweep: same network,
+same options, one variant per worker, `asyncio.gather` or a `ThreadPoolExecutor` with the
+variant selected in the pool initializer. Three differences change the numbers:
+
+| pattern (512 scenarios, 20 threads) | 4 | 8 | 16 | 24 | loop at 16 |
+|---|---:|---:|---:|---:|---:|
+| independent workers, 10 generators changed | 894 | 1215 | **1546** | 1318 | 0.89 |
+| independent workers, all loads and generators changed | 305 | 491 | 687 | 715 | 0.84 |
+| batches with a barrier, 10 generators changed | 595 | 604 | 819 | 703 | 0.56 |
+| batches with a barrier, all loads and generators changed | 243 | 207 | 402 | 401 | 0.39 |
+
+* their scenario changes all 198 loads and all 69 generators, ours shifts 10 generator
+  setpoints: 12.05 ms and 24.8 solver iterations per scenario against 3.99 ms and 16.0;
+* `parallel_loadflow_min.py` processes scenarios in batches of W with a barrier per batch,
+  which costs 35-45%; our benchmarks let workers run independently;
+* `parallel_loadflow_pool.py` needs the concurrency fix of this branch to run at all.
+
+Both are valid, they answer different questions: ours measures the ceiling of the mechanism,
+theirs measures a sweep as a user would write it. The first thing to fix in the latter is the
+barrier.
+
 ## Caveat
 
-4 vCPUs is a thin basis for a scaling study: the region where these effects separate
-(8–64 workers) cannot be observed here, and on this box the CPU count and the common pool
-cap (3) nearly coincide. All three scripts take `--workers` / `--total-lf` / `--csv`, so
-re-running them on a larger machine is the natural next step — item 1 in particular should
-become dramatic there.
+The original measurements below were made on 4 vCPUs, a thin basis for a scaling study: the
+region where these effects separate (8-64 workers) cannot be observed there, and on that box
+the CPU count and the common pool cap (3) nearly coincide. The 20 thread results above
+supersede them where they disagree.
 
 ## Corrections
 
