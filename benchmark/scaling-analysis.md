@@ -36,7 +36,8 @@ Ranked causes, most to least costly:
 1. every load flow runs on `ForkJoinPool.commonPool()`, capped at `availableProcessors - 1`,
    because pypowsybl builds its computation manager with `LocalComputationManager.getDefault()`,
 2. `update_generators` is ~90% Python/pandas under the GIL and *anti-scales* (0.54x on 4 threads),
-3. the OpenLoadFlow network cache scans its entries linearly under one process-wide lock,
+3. the OpenLoadFlow network cache scans its entries linearly under one process-wide lock -
+   a thread-safety bug, but not, as first stated here, a measurable scaling limit,
 4. the pypowsybl per-call machinery takes two global mutexes and two GIL acquisitions per call,
 5. variant creation is unsynchronised, `O(network size)`, and holds the GIL.
 
@@ -128,8 +129,20 @@ And a no-op `run_ac` (cache hit, nothing changed) stops scaling as entries accum
 | 4  | 1140 ops/s | 1888 ops/s | 1.66 |
 | 32 | 1457 ops/s |  955 ops/s | **0.66** |
 
-An entry map keyed by (network, variant) instead of a scanned list, and a per-network lock
-instead of the static one, would remove both effects.
+**Attribution not confirmed.** A controlled java benchmark of the same pattern (IEEE118,
+cached load flows on N variants, run directly from java so that none of the pypowsybl call
+machinery is in the way) shows no reproducible difference between the scanned list and a
+keyed map, at 4, 64, 128, 256 or 512 entries, single threaded or on 4 threads: run to run
+noise is ±40%, larger than any effect. What the numbers above measure is therefore most
+likely the cost of *having* more variants — bigger variant arrays in IIDM, more cached
+`LfNetwork` instances, more GC pressure — rather than the cache lookup itself.
+
+What the cache does have is a thread-safety bug: `findEntry()` iterates the `ArrayList`
+**without holding the lock**, while `get()` mutates it under the lock, and
+`OpenLoadFlowProvider` calls `findEntry()` on the load flow path. Concurrent load flows on
+the same network can therefore hit a `ConcurrentModificationException` or a stale read. An
+entry map keyed by (network, variant) fixes that and keeps the lookup O(1), but should be
+proposed as a correctness fix, not a performance one.
 
 ## 4. Per-call binding machinery: two mutexes and two GIL acquisitions
 
@@ -201,8 +214,9 @@ touch a variant-per-worker scenario.
    default `LocalComputationManager`, which runs everything on the common pool. Decides
    whether 32 workers can ever use 32 cores, and stops load flows from competing with the
    parallel streams of the calling application.
-2. **powsybl-open-loadflow**: key `NetworkCache` entries by (network, variant) and drop the
-   process-wide lock to a per-network one.
+2. **powsybl-open-loadflow**: key `NetworkCache` entries by (network, variant) so that
+   `findEntry()` stops racing with `get()` on a plain `ArrayList`. Correctness, not speed:
+   no performance difference is measurable.
 3. **pypowsybl Python**: memoize the dataframe metadata and add a pandas-free kwargs path in
    `update_*`.
 4. **pypowsybl C++**: remove the two per-call singleton mutexes, push the log level only when
@@ -218,9 +232,14 @@ cap (3) nearly coincide. All three scripts take `--workers` / `--total-lf` / `--
 re-running them on a larger machine is the natural next step — item 1 in particular should
 become dramatic there.
 
-## Correction
+## Corrections
 
 An earlier revision of this document attributed the common pool cap to
 `OpenLoadFlowProvider.run` submitting without an executor. That is wrong: it does pass
 `computationManager.getExecutor()`. The cap is real, but it comes from the executor
 pypowsybl hands it, as described in section 1.
+
+The same revision blamed the `NetworkCache` entry scan for the slowdown observed when many
+variants are cached. A java benchmark of the same pattern does not reproduce any effect of
+the entry count on lookup cost, so that attribution is withdrawn: see section 3. The cache
+does have a thread-safety bug, which is a separate matter.
