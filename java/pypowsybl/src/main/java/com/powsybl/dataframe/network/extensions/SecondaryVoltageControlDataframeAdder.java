@@ -14,10 +14,14 @@ import com.powsybl.dataframe.update.DoubleSeries;
 import com.powsybl.dataframe.update.IntSeries;
 import com.powsybl.dataframe.update.StringSeries;
 import com.powsybl.dataframe.update.UpdatingDataframe;
+import com.powsybl.iidm.network.Bus;
+import com.powsybl.iidm.network.BusbarSection;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.iidm.network.extensions.*;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Hugo Kulesza {@literal <hugo.kulesza@rte-france.com>}
@@ -71,8 +75,26 @@ public class SecondaryVoltageControlDataframeAdder extends AbstractSimpleAdder {
                 String name = zoneName.get(zone);
                 ControlZoneAdder controlZoneAdder = adder.newControlZone();
                 controlZoneAdder.withName(name);
+                // the pilot point ids were one list; the split extension keeps busbar sections and buses
+                // apart, so each id is routed by what the network says it is (see RstJsonProvider)
+                List<String> busbarSectionIds = new ArrayList<>();
+                List<PilotPoint.BusRef> buses = new ArrayList<>();
+                for (String pilotId : busIds.get(zone).split(",")) {
+                    if (network.getBusbarSection(pilotId) != null) {
+                        busbarSectionIds.add(pilotId);
+                        continue;
+                    }
+                    Bus bus = busById(network, pilotId);
+                    if (bus != null) {
+                        buses.add(new PilotPoint.BusRef(bus.getVoltageLevel().getId(), pilotId));
+                    } else {
+                        throw new PowsyblException("Pilot point '" + pilotId + "' of secondary voltage control zone '"
+                                + name + "' is neither a busbar section nor a bus.");
+                    }
+                }
                 controlZoneAdder.newPilotPoint()
-                    .withBusbarSectionsOrBusesIds(List.of(busIds.get(zone).split(",")))
+                    .withBusbarSectionIds(busbarSectionIds)
+                    .withBuses(buses)
                     .withTargetV(targetV.get(zone))
                     .add();
 
@@ -87,6 +109,15 @@ public class SecondaryVoltageControlDataframeAdder extends AbstractSimpleAdder {
                 controlZoneAdder.add();
             }
             adder.add();
+        }
+
+        /** The bus a pilot point names, searched voltage level by voltage level, or null where none has it. */
+        private static Bus busById(Network network, String busId) {
+            return network.getVoltageLevelStream()
+                    .map(voltageLevel -> voltageLevel.getBusBreakerView().getBus(busId))
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
         }
     }
 

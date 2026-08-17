@@ -263,7 +263,7 @@ class NetworkDataframesTest {
                         .withParticipate(false)
                         .add()
                     .newPilotPoint()
-                        .withBusbarSectionsOrBusesIds(List.of("NLOAD"))
+                        .withBuses(List.of(new com.powsybl.iidm.network.extensions.PilotPoint.BusRef("VLLOAD", "NLOAD")))
                         .withTargetV(15d)
                         .add()
                 .add()
