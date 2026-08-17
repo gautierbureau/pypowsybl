@@ -13,7 +13,7 @@ import com.powsybl.dataframe.dynamic.CategoryInformation;
 import com.powsybl.dataframe.update.UpdatingDataframe;
 import com.powsybl.dynawo.builders.ModelInfo;
 import com.powsybl.dynawo.models.buses.InfiniteBusBuilder;
-import com.powsybl.iidm.network.Bus;
+import com.powsybl.iidm.network.Identifiable;
 import com.powsybl.iidm.network.Network;
 
 import java.util.Collection;
@@ -39,7 +39,7 @@ public class InfiniteBusAdder extends AbstractEquipmentAdder {
 
     @Override
     protected DynamicModelSeries createDynamicModelSeries(UpdatingDataframe dataframe) {
-        return new AbstractEquipmentSeries<Bus, InfiniteBusBuilder>(dataframe) {
+        return new AbstractEquipmentSeries<Identifiable<?>, InfiniteBusBuilder>(dataframe) {
 
             @Override
             protected InfiniteBusBuilder createBuilder(Network network, ReportNode reportNode) {
