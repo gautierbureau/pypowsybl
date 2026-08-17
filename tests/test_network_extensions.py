@@ -727,6 +727,38 @@ def test_voltage_level_load_characteristics_errors():
         network.create_extensions('voltageLevelLoadCharacteristics', id='VLLOAD')
 
 
+def test_static_var_compensator_properties():
+    network = pn.create_four_substations_node_breaker_network()
+    assert network.get_extensions('staticVarCompensatorProperties').empty
+
+    network.create_extensions('staticVarCompensatorProperties', id='SVC', constructor='Alstom')
+    e = network.get_extensions('staticVarCompensatorProperties')
+    expected = pd.DataFrame(
+        index=pd.Series(name='id', data=['SVC']),
+        columns=['constructor'],
+        data=[['Alstom']])
+    pd.testing.assert_frame_equal(expected, e, check_dtype=False)
+
+    network.update_extensions('staticVarCompensatorProperties', id='SVC', constructor='Areva')
+    assert network.get_extensions('staticVarCompensatorProperties')['constructor']['SVC'] == 'Areva'
+
+    network.remove_extensions('staticVarCompensatorProperties', ['SVC'])
+    assert network.get_extensions('staticVarCompensatorProperties').empty
+
+
+def test_static_var_compensator_properties_errors():
+    network = pn.create_four_substations_node_breaker_network()
+
+    with pytest.raises(pypowsybl.PyPowsyblError,
+                       match="Static var compensator 'UNKNOWN' does not exist."):
+        network.create_extensions('staticVarCompensatorProperties', id='UNKNOWN', constructor='Alstom')
+
+    # the constructor has no default value, the extension cannot be created without it
+    with pytest.raises(pypowsybl.PyPowsyblError,
+                       match='Required column constructor is missing.'):
+        network.create_extensions('staticVarCompensatorProperties', id='SVC')
+
+
 def test_batteries_voltage_regulation():
     network = pn.load(str(TEST_DIR.joinpath('battery.xiidm')))
     assert network.get_extensions('voltageRegulation').empty
@@ -810,3 +842,4 @@ def test_get_extensions_information():
     assert extensions_information.loc['synchronizedGeneratorProperties']['attributes'] == 'index : id (str), type (str), rpcl2 (bool)'
     assert extensions_information.loc['generatorConnectionLevel']['attributes'] == 'index : id (str), level (str)'
     assert extensions_information.loc['voltageLevelLoadCharacteristics']['detail'] == 'Provides information, for dynamic simulation only, about the type of load connected to a voltage level'
+    assert extensions_information.loc['staticVarCompensatorProperties']['detail'] == 'Provides information, for dynamic simulation only, about the model a static var compensator is built on'
