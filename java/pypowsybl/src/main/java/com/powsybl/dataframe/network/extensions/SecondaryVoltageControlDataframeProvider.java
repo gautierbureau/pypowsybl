@@ -136,7 +136,11 @@ public class SecondaryVoltageControlDataframeProvider implements NetworkExtensio
                 NetworkDataframeMapperBuilder.ofStream(this::zonesStream, new ControlZoneGetter())
                         .stringsIndex("name", ControlZone::getName)
                         .doubles("target_v", (zone, context) -> zone.getPilotPoint().getTargetV(), (zone, v, context) -> zone.getPilotPoint().setTargetV(v))
-                        .strings("bus_ids", zone -> String.join(",", zone.getPilotPoint().getBusbarSectionsOrBusesIds()))
+                        .strings("bus_ids", zone -> java.util.stream.Stream.concat(
+                                zone.getPilotPoint().getBusbarSectionIds().stream(),
+                                zone.getPilotPoint().getBuses().stream()
+                                        .map(com.powsybl.iidm.network.extensions.PilotPoint.BusRef::busId))
+                                .collect(java.util.stream.Collectors.joining(",")))
                         .build()
         );
         mappers.put("units",
