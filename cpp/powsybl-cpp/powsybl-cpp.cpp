@@ -1952,10 +1952,6 @@ void addEventMappings(JavaHandle eventMappingHandle, std::string eventName, data
     PowsyblCaller::get()->callJava<>(::addEventMappings, eventMappingHandle, (char*) eventName.c_str(), mappingDf);
 }
 
-void addAdditionalModels(JavaHandle dynamicContextHandle, dataframe* additionalModelsDf) {
-    PowsyblCaller::get()->callJava<>(::addAdditionalModels, dynamicContextHandle, additionalModelsDf);
-}
-
 void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* additionalModelsDf) {
     PowsyblCaller::get()->callJava<>(::addMappingAdditionalModels, dynamicMappingHandle, additionalModelsDf);
 }

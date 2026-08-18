@@ -12,7 +12,6 @@ from pypowsybl import _pypowsybl as _pp
 from pypowsybl.utils import create_data_frame_from_series_array
 from pypowsybl.report import ReportNode
 from .event_mapping import EventMapping
-from .model_config import _to_c_dataframe
 from .model_mapping import ModelMapping
 from .simulation_result import SimulationResult
 from .output_variable_mapping import OutputVariableMapping
@@ -31,11 +30,11 @@ class Simulation:  # pylint: disable=too-few-public-methods
             parameters: Optional[Parameters] = None,
             report_node: Optional[ReportNode] = None
             ) -> SimulationResult:
-        """Run the dynawo simulation"""
-        # Register additional dynamic model definitions (if any) on the simulation context
-        # before running; they are applied to the Dynawo parameters natively.
-        if parameters is not None and parameters.additional_models:
-            _pp.add_additional_models(self._handle, _to_c_dataframe(parameters.additional_models))
+        """Run the dynawo simulation.
+
+        Additional dynamic model definitions are registered on the mapping with
+        :func:`ModelMapping.add_model_configs`, which reaches both this run and ``get_models``.
+        """
         return SimulationResult(
                 _pp.run_dynamic_simulation(
                     self._handle,

@@ -416,10 +416,6 @@ public final class DynamicSimulationCFunctions {
                     runParameters.setExtendable(null);
                     dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
                 });
-                // additional models declared on the run parameters (in-memory, from Python) are
-                // registered in the catalog before the run, on top of any the mapping already added
-                DynamicSimulationParametersCUtils.applyAdditionalModels(dynamicSimulationParameters,
-                        dynamicContext.getAdditionalModels());
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -465,23 +461,8 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
-    @CEntryPoint(name = "addAdditionalModels")
-    public static void addAdditionalModels(IsolateThread thread, ObjectHandle dynamicContextHandle,
-                                           DataframePointer additionalModelsDataframePtr,
-                                           ExceptionHandlerPointer exceptionHandlerPtr) {
-        doCatch(exceptionHandlerPtr, new Runnable() {
-            @Override
-            public void run() {
-                DynamicSimulationContext dynamicContext = ObjectHandles.getGlobal().get(dynamicContextHandle);
-                UpdatingDataframe additionalModelsDataframe = createDataframe(additionalModelsDataframePtr);
-                dynamicContext.setAdditionalModels(
-                        DynamicSimulationParametersCUtils.readAdditionalModels(additionalModelsDataframe));
-            }
-        });
-    }
-
-    // additional models set on the mapping itself, so they are registered when the mapping resolves —
-    // at get_models as well as at a run — rather than only on a run's context (see addAdditionalModels)
+    // additional models set on the mapping, so they are registered when the mapping resolves — at
+    // get_models as well as at a run (the run calls the mapping's get(), which resolves the recipes)
     @CEntryPoint(name = "addMappingAdditionalModels")
     public static void addMappingAdditionalModels(IsolateThread thread, ObjectHandle dynamicMappingHandle,
                                                   DataframePointer additionalModelsDataframePtr,

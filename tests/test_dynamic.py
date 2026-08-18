@@ -224,20 +224,6 @@ def test_model_config():
     assert dataframe is not None
 
 
-def test_default_parameters_no_additional_models():
-    parameters = dyn.Parameters()
-    assert parameters.additional_models == []
-
-
-def test_additional_models_kept_on_parameters():
-    load = dyn.ModelConfig(category='BASE_LOAD', lib='MyLoadPQ', doc='Custom load')
-    gen = dyn.ModelConfig(category='SYNCHRONOUS_GENERATOR', lib='GenX')
-    parameters = dyn.Parameters(start_time=1, stop_time=2, additional_models=[load, gen])
-    assert parameters.additional_models == [load, gen]
-    # marshalling the models to the native dataframe does not raise
-    assert _to_c_dataframe(parameters.additional_models) is not None
-
-
 def test_model_config_var_mapping_and_prefix():
     # var_mapping / var_prefix let a model registered under an existing category carry its own
     # variables and connection points; they are held on the config and marshalled without raising

@@ -7,10 +7,11 @@
 """
 Python equivalent of the Dynawo additional dynamic model definitions.
 
-Additional dynamic models can be described directly as :class:`ModelConfig` objects and passed to
-:class:`pypowsybl.dynamic.Parameters`. They are marshalled to the native layer as a dataframe and
-registered on the Dynawo simulation parameters (``DynawoSimulationParameters.setAdditionalModels``),
-so no ``models.json`` file has to be authored by hand.
+Additional dynamic models can be described directly as :class:`ModelConfig` objects and registered on
+the mapping with :func:`pypowsybl.dynamic.ModelMapping.add_model_configs`. They are marshalled to the
+native layer as a dataframe and registered on the Dynawo parameters
+(``DynawoSimulationParameters.setAdditionalModels``), so no ``models.json`` file has to be authored by
+hand, and they take effect both at a run and at ``get_models``.
 
 Each :class:`ModelConfig` mirrors one entry of the Dynawo ``models.json`` schema.
 """
@@ -105,8 +106,8 @@ class ModelConfig:
 def _to_c_dataframe(model_configs: List[ModelConfig]) -> _pypowsybl.Dataframe:
     """
     Build the native dataframe (one row per model) consumed by
-    ``_pypowsybl.add_additional_models``. ``category`` is the index column; the
-    ``properties`` list is encoded as a comma-separated string.
+    ``_pypowsybl.add_mapping_additional_models``. ``category`` is the index column; the ``properties``
+    list is a comma-separated string, and ``var_mapping`` / ``var_prefix`` are JSON strings.
     """
     records = [{
         'category': model_config.category,

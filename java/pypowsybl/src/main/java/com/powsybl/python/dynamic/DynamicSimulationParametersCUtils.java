@@ -184,16 +184,4 @@ public final class DynamicSimulationParametersCUtils {
         return new VersionInterval(min, max, endCause);
     }
 
-    /**
-     * Applies programmatic additional models onto the Dynawo extension of the given parameters.
-     */
-    public static void applyAdditionalModels(DynamicSimulationParameters parameters, Map<String, List<ModelConfig>> additionalModels) {
-        if (additionalModels.isEmpty()) {
-            return;
-        }
-        DynawoSimulationParameters dynawoParameters = parameters.getExtension(DynawoSimulationParameters.class);
-        if (dynawoParameters != null) {
-            dynawoParameters.setAdditionalModels(additionalModels);
-        }
-    }
 }

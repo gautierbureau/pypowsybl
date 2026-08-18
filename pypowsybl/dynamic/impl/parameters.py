@@ -4,9 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from pypowsybl import _pypowsybl
-from .model_config import ModelConfig
 
 
 class Parameters:  # pylint: disable=too-few-public-methods
@@ -23,17 +22,16 @@ class Parameters:  # pylint: disable=too-few-public-methods
         stop_time: instant of time at which the dynamic simulation ends, in seconds
         provider_parameters: Define parameters linked to the dynamic simulation provider
             currently Dynawo is the only provider handled by pypowsybl
-        additional_models: Additional dynamic model definitions to register at runtime,
-            as a list of :class:`ModelConfig`. This is the Python equivalent of Dynawo's
-            ``additionalModelsFile``: the models are marshalled to the native layer and
-            registered on the Dynawo simulation parameters, so no JSON file has to be
-            authored by hand.
+
+    Note:
+        To register additional dynamic model definitions, use
+        :func:`ModelMapping.add_model_configs` on the mapping — it reaches both a run and
+        :func:`ModelMapping.get_models`.
     """
 
     def __init__(self, start_time: Optional[float] = None,
                  stop_time: Optional[float] = None,
-                 provider_parameters: Optional[Dict[str, str]] = None,
-                 additional_models: Optional[List[ModelConfig]] = None):
+                 provider_parameters: Optional[Dict[str, str]] = None):
         self._init_with_default_values()
         if start_time is not None:
             self.start_time = start_time
@@ -41,7 +39,6 @@ class Parameters:  # pylint: disable=too-few-public-methods
             self.stop_time = stop_time
         if provider_parameters is not None:
             self.provider_parameters = provider_parameters
-        self.additional_models: List[ModelConfig] = list(additional_models) if additional_models is not None else []
 
     def _init_with_default_values(self) -> None:
         default_parameters = _pypowsybl.DynamicSimulationParameters()
@@ -63,5 +60,4 @@ class Parameters:  # pylint: disable=too-few-public-methods
                f"start_time={self.start_time}" \
                f", stop_time={self.stop_time}" \
                f", provider_parameters={self.provider_parameters!r}" \
-               f", additional_models={self.additional_models!r}" \
                f")"

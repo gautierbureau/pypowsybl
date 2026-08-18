@@ -61,8 +61,8 @@ class ModelMapping:
         This is the Python equivalent of Dynawo's ``additionalModelsFile``: each :class:`ModelConfig`
         is marshalled to the native layer and registered on the mapping's Dynawo parameters
         (``DynawoSimulationParameters.setAdditionalModels``), so no ``models.json`` file has to be
-        authored by hand. Unlike declaring the models on :class:`~pypowsybl.dynamic.Parameters` (which
-        only reaches a run), models registered here also reach :func:`get_models`.
+        authored by hand. The models are registered when the mapping resolves, so they take effect
+        both at a run and at :func:`get_models`.
 
         A model registered under an existing generator category (e.g. ``BASE_GENERATOR``) with a
         :attr:`~ModelConfig.var_mapping` / :attr:`~ModelConfig.var_prefix` carries its own variables

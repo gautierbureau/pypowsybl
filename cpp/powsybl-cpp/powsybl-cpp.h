@@ -1040,8 +1040,6 @@ std::vector<SeriesMetadata> getEventMappingsMetaData(std::string eventName);
 SeriesArray* getEventsInformation();
 
 // additional dynamic models
-void addAdditionalModels(JavaHandle dynamicContextHandle, dataframe* additionalModelsDf);
-
 void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* additionalModelsDf);
 
 // dynamic model mapping

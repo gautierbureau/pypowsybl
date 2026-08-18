@@ -62,12 +62,13 @@ Additional models
 Dynawo can register additional dynamic model definitions at runtime (equivalent to its
 ``additionalModelsFile``, a JSON file following the ``models.json`` schema). In pypowsybl you describe
 these models directly in Python with the :class:`~pypowsybl.dynamic.ModelConfig` class instead of authoring
-a JSON file: they are passed to the native layer and registered on the Dynawo simulation parameters
-automatically.
+a JSON file, and register them on the mapping with :func:`~pypowsybl.dynamic.ModelMapping.add_model_configs`.
+The models are registered when the mapping resolves, so they reach both a run and ``get_models``.
 
 A model must extend an **existing** category (see ``ModelMapping.get_categories_names``) and cannot
 overwrite a built-in model. Once registered, its name can be used through the ``model_name`` argument of
-the ``add_*`` methods, exactly like a built-in model.
+the ``add_*`` methods, exactly like a built-in model. A model registered under an existing generator
+category can carry its own variables and connection points through ``var_mapping`` / ``var_prefix``.
 
 .. code-block:: python
 
@@ -79,11 +80,11 @@ the ``add_*`` methods, exactly like a built-in model.
                               doc='My custom load model',
                               properties=['CONTROLLABLE'])
 
-    parameters = dyn.Parameters(start_time=0, stop_time=50,
-                                additional_models=[my_load])
+    # register it on the mapping (reaches both a run and get_models)
+    model_mapping = dyn.ModelMapping()
+    model_mapping.add_model_configs([my_load])
 
     # the new model name is now usable like a built-in one
-    model_mapping = dyn.ModelMapping()
     model_mapping.add_base_load(static_id='LOAD', parameter_set_id='LAB', model_name='MyCustomLoad')
 
 Simple example
