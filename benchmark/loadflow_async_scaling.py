@@ -102,8 +102,9 @@ def load_network(name: str, multi_thread: bool) -> pp.network.Network:
     return pn.load(name, allow_variant_multi_thread_access=multi_thread)
 
 
-def build_parameters(network_cache: bool, distributed_slack: bool) -> lf.Parameters:
+def build_parameters(network_cache: bool, distributed_slack: bool, dc_init: bool = False) -> lf.Parameters:
     return lf.Parameters(distributed_slack=distributed_slack,
+                         voltage_init_mode=lf.VoltageInitMode.DC_VALUES if dc_init else lf.VoltageInitMode.UNIFORM_VALUES,
                          provider_parameters={'networkCacheEnabled': 'true' if network_cache else 'false'})
 
 
@@ -258,12 +259,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument('--no-multi-thread-variant', action='store_true',
                         help='load the network without allow_variant_multi_thread_access (expected to fail)')
     parser.add_argument('--distributed-slack', action='store_true', help='enable slack distribution')
+    parser.add_argument('--dc-init', action='store_true',
+                        help='start the AC load flow from a DC load flow, which large networks may need to converge')
     parser.add_argument('--no-sync-reference', action='store_true', help='skip the blocking run_ac reference')
     parser.add_argument('--csv', help='write the results to this CSV file')
     args = parser.parse_args(argv)
 
     worker_counts = [int(w) for w in args.workers.split(',') if w]
-    parameters = build_parameters(not args.no_network_cache, args.distributed_slack)
+    parameters = build_parameters(not args.no_network_cache, args.distributed_slack, args.dc_init)
     network = load_network(args.network, not args.no_multi_thread_variant)
     gen_ids, base_p = pick_generators(network, args.gens)
 
