@@ -238,6 +238,28 @@ def test_additional_models_kept_on_parameters():
     assert _to_c_dataframe(parameters.additional_models) is not None
 
 
+def test_model_config_var_mapping_and_prefix():
+    # var_mapping / var_prefix let a model registered under an existing category carry its own
+    # variables and connection points; they are held on the config and marshalled without raising
+    config = dyn.ModelConfig(category='BASE_GENERATOR', lib='DynGridFollowing', properties=['SYNCHRONIZED'],
+                             var_mapping=[('GFL_Measurements_PFilterPu', 'p'), ('GFL_state', 'state')],
+                             var_prefix={'terminal': 'GFL_terminal'})
+    assert config.var_mapping == [('GFL_Measurements_PFilterPu', 'p'), ('GFL_state', 'state')]
+    assert config.var_prefix == {'terminal': 'GFL_terminal'}
+    assert _to_c_dataframe([config]) is not None
+
+
+def test_add_model_configs_on_mapping():
+    # additional models registered on the mapping itself (not only a run's Parameters) so they
+    # resolve at get_models; the native call accepts the marshalled models
+    model_mapping = dyn.ModelMapping()
+    model_mapping.add_model_configs([
+        dyn.ModelConfig(category='BASE_GENERATOR', lib='DynGridFollowing',
+                        var_mapping=[('GFL_Measurements_PFilterPu', 'p')], var_prefix={'terminal': 'GFL_terminal'})])
+    # an empty list is a no-op
+    model_mapping.add_model_configs([])
+
+
 def test_synchronous_generator_properties():
     n = pn.create_four_substations_node_breaker_network()
     extension_name = 'synchronousGeneratorProperties'
