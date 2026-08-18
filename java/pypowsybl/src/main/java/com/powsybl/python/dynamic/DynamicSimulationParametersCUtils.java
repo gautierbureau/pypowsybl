@@ -7,6 +7,9 @@
  */
 package com.powsybl.python.dynamic;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.powsybl.commons.PowsyblException;
 import com.powsybl.commons.parameters.Parameter;
 import com.powsybl.dataframe.update.UpdatingDataframe;
@@ -16,6 +19,7 @@ import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.builders.ModelConfig;
 import com.powsybl.dynawo.builders.VersionInterval;
 import com.powsybl.dynawo.commons.DynawoVersion;
+import com.powsybl.dynawo.models.VarMapping;
 import com.powsybl.python.commons.CTypeUtil;
 import com.powsybl.python.commons.PyPowsyblApiHeader.DynamicSimulationParametersPointer;
 
@@ -43,6 +47,10 @@ public final class DynamicSimulationParametersCUtils {
     private static final String MIN_VERSION = "min_version";
     private static final String MAX_VERSION = "max_version";
     private static final String END_CAUSE = "end_cause";
+    private static final String VAR_MAPPING = "var_mapping";
+    private static final String VAR_PREFIX = "var_prefix";
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private DynamicSimulationParametersCUtils() {
     }
@@ -126,7 +134,42 @@ public final class DynamicSimulationParametersCUtils {
                 .filter(s -> !s.isEmpty())
                 .map(s -> Arrays.asList(s.split(",")))
                 .orElse(Collections.emptyList());
-        return new ModelConfig(lib, alias, internalModelPrefix, properties, doc, createVersionInterval(dataframe, row));
+        // the optional var mapping and var prefix let a model registered under an existing category
+        // carry its own variable names and connection points, so it wires like a dedicated model
+        // (read by BaseGenerator / CustomGeneratorComponent) rather than the category's defaults
+        List<VarMapping> varMapping = parseVarMapping(dataframe.getStringValue(VAR_MAPPING, row).orElse(""));
+        Map<String, String> varPrefix = parseVarPrefix(dataframe.getStringValue(VAR_PREFIX, row).orElse(""));
+        return new ModelConfig(lib, alias, internalModelPrefix, properties, doc,
+                createVersionInterval(dataframe, row), varMapping, varPrefix);
+    }
+
+    /** Parses a JSON array of [dynamicVar, staticVar] pairs into var mappings, empty where none. */
+    private static List<VarMapping> parseVarMapping(String json) {
+        if (json.isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            List<List<String>> pairs = JSON.readValue(json, new TypeReference<List<List<String>>>() { });
+            List<VarMapping> varMapping = new ArrayList<>(pairs.size());
+            for (List<String> pair : pairs) {
+                varMapping.add(new VarMapping(pair.get(0), pair.get(1)));
+            }
+            return varMapping;
+        } catch (JsonProcessingException e) {
+            throw new PowsyblException("Invalid var_mapping JSON for an additional model: " + json, e);
+        }
+    }
+
+    /** Parses a JSON object of connection-point name overrides (terminal, omegaRefPu, ...), empty where none. */
+    private static Map<String, String> parseVarPrefix(String json) {
+        if (json.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return JSON.readValue(json, new TypeReference<LinkedHashMap<String, String>>() { });
+        } catch (JsonProcessingException e) {
+            throw new PowsyblException("Invalid var_prefix JSON for an additional model: " + json, e);
+        }
     }
 
     private static VersionInterval createVersionInterval(UpdatingDataframe dataframe, int row) {

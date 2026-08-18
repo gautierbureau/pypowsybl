@@ -234,6 +234,7 @@ void dynamicSimulationBindings(py::module_& m) {
 
     //additional models
     m.def("add_additional_models", &pypowsybl::addAdditionalModels, py::arg("dynamic_context_handle"), py::arg("additional_models_df"));
+    m.def("add_mapping_additional_models", &pypowsybl::addMappingAdditionalModels, py::arg("dynamic_mapping_handle"), py::arg("additional_models_df"));
 
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));

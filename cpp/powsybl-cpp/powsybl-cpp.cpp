@@ -1956,6 +1956,10 @@ void addAdditionalModels(JavaHandle dynamicContextHandle, dataframe* additionalM
     PowsyblCaller::get()->callJava<>(::addAdditionalModels, dynamicContextHandle, additionalModelsDf);
 }
 
+void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* additionalModelsDf) {
+    PowsyblCaller::get()->callJava<>(::addMappingAdditionalModels, dynamicMappingHandle, additionalModelsDf);
+}
+
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType) {
     ToCharPtrPtr variablesPtr(variables);
     PowsyblCaller::get()->callJava<>(::addOutputVariables, outputVariablesHandle, (char*) dynamicId.c_str(), variablesPtr.get(), variables.size(), variableType);

@@ -14,8 +14,9 @@ so no ``models.json`` file has to be authored by hand.
 
 Each :class:`ModelConfig` mirrors one entry of the Dynawo ``models.json`` schema.
 """
+import json
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from pypowsybl import _pypowsybl
@@ -35,6 +36,8 @@ _ADDITIONAL_MODELS_METADATA = [
     _pypowsybl.SeriesMetadata('min_version', _STRING_SERIES_TYPE, False, False, False),
     _pypowsybl.SeriesMetadata('max_version', _STRING_SERIES_TYPE, False, False, False),
     _pypowsybl.SeriesMetadata('end_cause', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('var_mapping', _STRING_SERIES_TYPE, False, False, False),
+    _pypowsybl.SeriesMetadata('var_prefix', _STRING_SERIES_TYPE, False, False, False),
 ]
 
 _ADDITIONAL_MODELS_COLUMNS = [s.name for s in _ADDITIONAL_MODELS_METADATA]
@@ -72,6 +75,14 @@ class ModelConfig:
         min_version: optional minimum compatible Dynawo version, e.g. ``'1.7.0'``.
         max_version: optional maximum compatible Dynawo version.
         end_cause: optional note describing why a model is deprecated.
+        var_mapping: optional list of ``(dynamic_var, static_var)`` pairs overriding the model's
+            variable mapping, so a model registered under an existing generator category
+            (e.g. ``BASE_GENERATOR``) wires its own variables instead of the category's defaults —
+            e.g. ``[('GFL_Measurements_PFilterPu', 'p'), ('GFL_state', 'state')]``. Read on the Dynawo
+            side by ``CustomGeneratorComponent`` when either this or ``var_prefix`` is set.
+        var_prefix: optional map overriding connection-point variable names — keys among
+            ``terminal``, ``switchOffSignal``, ``omegaRefPu``, ``omegaPu``, ``running`` — to the exact
+            variable name, e.g. ``{'terminal': 'GFL_terminal'}``.
     """
     category: str
     lib: str
@@ -82,6 +93,8 @@ class ModelConfig:
     min_version: Optional[str] = None
     max_version: Optional[str] = None
     end_cause: Optional[str] = None
+    var_mapping: List[Tuple[str, str]] = field(default_factory=list)
+    var_prefix: Dict[str, str] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -105,6 +118,8 @@ def _to_c_dataframe(model_configs: List[ModelConfig]) -> _pypowsybl.Dataframe:
         'min_version': model_config.min_version,
         'max_version': model_config.max_version,
         'end_cause': model_config.end_cause,
+        'var_mapping': json.dumps([list(pair) for pair in model_config.var_mapping]) if model_config.var_mapping else '',
+        'var_prefix': json.dumps(dict(model_config.var_prefix)) if model_config.var_prefix else '',
     } for model_config in model_configs]
     dataframe = pd.DataFrame(records, columns=_ADDITIONAL_MODELS_COLUMNS).set_index('category')
     return _create_c_dataframe(dataframe.fillna(''), _ADDITIONAL_MODELS_METADATA)

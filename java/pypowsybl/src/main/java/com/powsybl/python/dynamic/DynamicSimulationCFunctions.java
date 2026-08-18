@@ -480,6 +480,23 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
+    // additional models set on the mapping itself, so they are registered when the mapping resolves —
+    // at get_models as well as at a run — rather than only on a run's context (see addAdditionalModels)
+    @CEntryPoint(name = "addMappingAdditionalModels")
+    public static void addMappingAdditionalModels(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                                  DataframePointer additionalModelsDataframePtr,
+                                                  ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                UpdatingDataframe additionalModelsDataframe = createDataframe(additionalModelsDataframePtr);
+                dynamicMapping.getOrCreateMappingParameters().setAdditionalModels(
+                        DynamicSimulationParametersCUtils.readAdditionalModels(additionalModelsDataframe));
+            }
+        });
+    }
+
     private static void addMappings(ObjectHandle dynamicMappingHandle, CCharPointer categoryNamePtr,
                                     DataframeArrayPointer mappingDataframePtr, PythonDynamicModelsSupplier.Mode mode) {
         String categoryName = CTypeUtil.toString(categoryNamePtr);

@@ -10,6 +10,7 @@ from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
 from pypowsybl.network import Network
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
+from .model_config import ModelConfig, _to_c_dataframe  # pylint: disable=protected-access
 
 
 def _to_parameter_value(value: Any) -> str:
@@ -50,6 +51,40 @@ class ModelMapping:
         """
         _pp.add_mapping_recipe(self._handle, mapping_name,
                                {name: _to_parameter_value(value) for name, value in settings.items()})
+
+    def add_model_configs(self, model_configs: List[ModelConfig]) -> None:
+        """
+        Register additional dynamic model definitions on this mapping, so their model names are
+        available to the ``add_*`` methods and resolve when the mapping is applied — at
+        :func:`get_models` as well as when a simulation runs.
+
+        This is the Python equivalent of Dynawo's ``additionalModelsFile``: each :class:`ModelConfig`
+        is marshalled to the native layer and registered on the mapping's Dynawo parameters
+        (``DynawoSimulationParameters.setAdditionalModels``), so no ``models.json`` file has to be
+        authored by hand. Unlike declaring the models on :class:`~pypowsybl.dynamic.Parameters` (which
+        only reaches a run), models registered here also reach :func:`get_models`.
+
+        A model registered under an existing generator category (e.g. ``BASE_GENERATOR``) with a
+        :attr:`~ModelConfig.var_mapping` / :attr:`~ModelConfig.var_prefix` carries its own variables
+        and connection points, so it wires like a dedicated model rather than the category's default.
+
+        Args:
+            model_configs: the additional model definitions to register
+
+        Examples:
+            .. code-block:: python
+
+                model_mapping.create_mapping('RteDynaSwing')
+                model_mapping.add_model_configs([dyn.ModelConfig(
+                    category='BASE_GENERATOR', lib='DynGridFollowing', properties=['SYNCHRONIZED'],
+                    var_mapping=[('GFL_Measurements_PFilterPu', 'p'), ('GFL_state', 'state')],
+                    var_prefix={'terminal': 'GFL_terminal'})])
+                model_mapping.add_dynamic_model('BASE_GENERATOR', static_id='GEN', parameter_set_id='GFL_Wind',
+                                                model_name='DynGridFollowing')
+        """
+        if not model_configs:
+            return
+        _pp.add_mapping_additional_models(self._handle, _to_c_dataframe(model_configs))
 
     @staticmethod
     def get_available_mappings() -> DataFrame:

@@ -1042,6 +1042,8 @@ SeriesArray* getEventsInformation();
 // additional dynamic models
 void addAdditionalModels(JavaHandle dynamicContextHandle, dataframe* additionalModelsDf);
 
+void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* additionalModelsDf);
+
 // dynamic model mapping
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes);
 std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string categoryName);
