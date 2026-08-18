@@ -561,9 +561,9 @@ def test_tap_changer_blockings():
               ('mp2', 'tcb1', '', 'BBS2,BBS3')])
     control_voltage_levels_df = pd.DataFrame.from_records(
         index='id',
-        columns=['id', 'tcb_name', 'force_one_transformer_loads'],
-        data=[('VLHV1', 'tcb1', False),
-              ('VLHV2', 'tcb1', True)])
+        columns=['id', 'tcb_name'],
+        data=[('VLHV1', 'tcb1'),
+              ('VLHV2', 'tcb1')])
     n.create_extensions(extension_name, [blockings_df, measurement_points_df, control_voltage_levels_df])
 
     blockings = n.get_extensions(extension_name, 'blockings')
@@ -580,8 +580,7 @@ def test_tap_changer_blockings():
 
     cvls = n.get_extensions(extension_name, 'control_voltage_levels')
     assert cvls.loc['VLHV1'].tcb_name == 'tcb1'
-    assert cvls.loc['VLHV1'].force_one_transformer_loads == False
-    assert cvls.loc['VLHV2'].force_one_transformer_loads == True
+    assert list(cvls.index) == ['VLHV1', 'VLHV2']
 
     n.remove_extensions(extension_name, ['tcb1'])
     assert n.get_extensions(extension_name, 'blockings').empty

@@ -50,7 +50,7 @@ public class TapChangerBlockingsDataframeProvider implements NetworkExtensionDat
                 "Provides information, for dynamic simulation only, about the tap changer blockings: the points each watches and the voltage levels each blocks, in three linked dataframes.",
                 "[dataframe \"blockings\"] index : name (str) / "
                         + "[dataframe \"measurement_points\"] index : id (str), tcb_name (str), buses (str, comma-joined \"voltage_level_id:bus_id\"), busbar_section_ids (str, comma-joined) / "
-                        + "[dataframe \"control_voltage_levels\"] index : id (str), tcb_name (str), force_one_transformer_loads (bool)");
+                        + "[dataframe \"control_voltage_levels\"] index : id (str), tcb_name (str)");
     }
 
     @Override
@@ -105,7 +105,6 @@ public class TapChangerBlockingsDataframeProvider implements NetworkExtensionDat
                 NetworkDataframeMapperBuilder.ofStream(this::controlVoltageLevelsStream)
                         .stringsIndex("id", ctx -> ctx.controlVoltageLevel().getId())
                         .strings("tcb_name", ControlVoltageLevelContext::tcbName)
-                        .booleans("force_one_transformer_loads", ctx -> ctx.controlVoltageLevel().forceOneTransformerLoads())
                         .build());
         return mappers;
     }

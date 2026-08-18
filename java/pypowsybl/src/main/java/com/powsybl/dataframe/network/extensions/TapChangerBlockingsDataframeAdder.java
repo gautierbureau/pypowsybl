@@ -10,11 +10,9 @@ package com.powsybl.dataframe.network.extensions;
 import com.powsybl.commons.PowsyblException;
 import com.powsybl.dataframe.SeriesMetadata;
 import com.powsybl.dataframe.network.adders.AbstractSimpleAdder;
-import com.powsybl.dataframe.update.IntSeries;
 import com.powsybl.dataframe.update.StringSeries;
 import com.powsybl.dataframe.update.UpdatingDataframe;
 import com.powsybl.iidm.network.Network;
-import com.powsybl.iidm.network.extensions.ControlVoltageLevelAdder;
 import com.powsybl.iidm.network.extensions.MeasurementPoint;
 import com.powsybl.iidm.network.extensions.MeasurementPointAdder;
 import com.powsybl.iidm.network.extensions.TapChangerBlockingAdder;
@@ -43,8 +41,7 @@ public class TapChangerBlockingsDataframeAdder extends AbstractSimpleAdder {
 
     private static final List<SeriesMetadata> CONTROL_VOLTAGE_LEVELS_METADATA = List.of(
             SeriesMetadata.stringIndex("id"),
-            SeriesMetadata.strings("tcb_name"),
-            SeriesMetadata.booleans("force_one_transformer_loads"));
+            SeriesMetadata.strings("tcb_name"));
 
     @Override
     public List<List<SeriesMetadata>> getMetadata() {
@@ -65,7 +62,6 @@ public class TapChangerBlockingsDataframeAdder extends AbstractSimpleAdder {
         private final int controlCount;
         private final StringSeries controlId;
         private final StringSeries controlTcbName;
-        private final IntSeries controlForceOneTransformerLoads;
 
         TapChangerBlockingsSeries(UpdatingDataframe blockingsDf, UpdatingDataframe pointsDf, UpdatingDataframe controlsDf) {
             this.blockingCount = blockingsDf.getRowCount();
@@ -80,7 +76,6 @@ public class TapChangerBlockingsDataframeAdder extends AbstractSimpleAdder {
             this.controlCount = controlsDf.getRowCount();
             this.controlId = controlsDf.getStrings("id");
             this.controlTcbName = controlsDf.getStrings("tcb_name");
-            this.controlForceOneTransformerLoads = controlsDf.getInts("force_one_transformer_loads");
         }
 
         private static List<MeasurementPoint.BusRef> parseBuses(String buses) {
@@ -138,12 +133,9 @@ public class TapChangerBlockingsDataframeAdder extends AbstractSimpleAdder {
 
                 for (int control = 0; control < controlCount; control++) {
                     if (controlTcbName.get(control).equals(name)) {
-                        ControlVoltageLevelAdder<TapChangerBlockingAdder> controlAdder = tcbAdder.newControlVoltageLevel()
-                                .withId(controlId.get(control));
-                        if (controlForceOneTransformerLoads != null && controlForceOneTransformerLoads.get(control) == 1) {
-                            controlAdder.withForceOneTransformerLoads();
-                        }
-                        controlAdder.add();
+                        tcbAdder.newControlVoltageLevel()
+                                .withId(controlId.get(control))
+                                .add();
                     }
                 }
 

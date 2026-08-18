@@ -13,7 +13,6 @@ import com.powsybl.dataframe.network.adders.AbstractSimpleAdder;
 import com.powsybl.dataframe.network.adders.SeriesUtils;
 import com.powsybl.dataframe.update.StringSeries;
 import com.powsybl.dataframe.update.UpdatingDataframe;
-import com.powsybl.dynawo.extensions.api.svarc.StaticVarCompensatorProperties;
 import com.powsybl.dynawo.extensions.api.svarc.StaticVarCompensatorPropertiesAdder;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.iidm.network.StaticVarCompensator;
