@@ -147,6 +147,15 @@ def following_set(machine_id: str, energy_source: str) -> str:
 def main(ieee118_xiidm: str) -> None:
     network = network_with_new_machines(ieee118_xiidm)
 
+    # Set the RTE extensions up from their databases, so a study can read or tweak what the machines
+    # and automatons are described as before the mapping runs. This is optional -- the mapping fills
+    # the same set in on its own when it resolves -- but shown here for completeness. Either the whole
+    # set in one call:
+    dyn.add_dynamic_simulation_extensions(network, "RteDynaSwing")
+    # or one kind at a time; the extension is already there from the call above, so the provider
+    # leaves it be (create if absent, use if present):
+    dyn.add_extensions(network, "synchronousGeneratorProperties", "RteSynchronousGenerators")
+
     mapping = dyn.ModelMapping()
     mapping.create_mapping("RteDynaSwing")
 
