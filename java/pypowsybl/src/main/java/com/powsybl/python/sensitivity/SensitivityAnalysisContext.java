@@ -348,8 +348,9 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             // stays caller-side — it depends on the matrix column layout (offsetColumn), which OLF ignores.
             for (int j = 0; j < columns.size(); j++) {
                 String functionId = SensitivityFactor.resolveBusId(columns.get(j), functionType, network);
-                cotangentByFunctionId.merge(AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
-                        functionCotangents[matrix.getOffsetColumn() + j], Double::sum);
+                putFunctionCotangent(cotangentByFunctionId,
+                        AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
+                        functionCotangents[matrix.getOffsetColumn() + j]);
             }
 
             // variables (rows) of this block, each with its resolved type + set-ness
@@ -371,6 +372,35 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
                 sensitivityAnalysisParameters);
 
         return new SensitivityAnalysisAdjointResultContext(factorsMatrix, gradientByVariableId);
+    }
+
+    /**
+     * Record one declared column's cotangent under its {@code (functionType, functionId)} key, tolerating the
+     * SAME function being declared by several factor matrices but never double-counting it.
+     *
+     * <p>{@code ȳ} is a property of a monitored FUNCTION, not of the matrix that happens to declare it. The
+     * flat input vector carries one slot per (matrix, column) instead, so fusing several variable families
+     * into one call — each declaring the same monitored functions against its own variables — presents the
+     * same function several times. Summing those slots, which this did, silently multiplies {@code ȳ} by the
+     * number of families and returns a plausible gradient that is simply k times too large. Callers were left
+     * to defeat it by putting the real cotangent on the first family's matrices and zeros on all the others,
+     * an invariant nothing checked and a reader of the caller could not guess.</p>
+     *
+     * <p>So: the repeated slots must AGREE, and the agreed value is used once. Zero reads as "not stated
+     * here", which keeps the zero-fill convention working unchanged; two different non-zero values are a
+     * genuine contradiction about one number and are rejected rather than blended.</p>
+     */
+    private static void putFunctionCotangent(Map<String, Double> cotangentByFunctionId, String key, double value) {
+        Double previous = cotangentByFunctionId.get(key);
+        if (previous == null || previous == 0.0) {
+            cotangentByFunctionId.put(key, value);
+            return;
+        }
+        if (value != 0.0 && value != previous) {
+            throw new PowsyblException("Conflicting cotangents for monitored function '" + key + "': "
+                    + previous + " and " + value + ". A monitored function has ONE dL/dfunction, whichever "
+                    + "factor matrices declare it; state the same value (or 0) in every matrix that does.");
+        }
     }
 
 }

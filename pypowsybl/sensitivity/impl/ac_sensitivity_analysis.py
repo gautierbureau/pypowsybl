@@ -140,7 +140,12 @@ class AcSensitivityAnalysis(SensitivityAnalysis):
             network:    The network (with a warm networkCacheEnabled AC load flow)
             cotangents: ``dL/dfunction``; either a flat sequence aligned with all declared functions in
                         declaration order, or a dict ``{vector_id: sequence over that factor matrix's functions}``
-                        (``vector_id`` being the ``matrix_id`` used when the factors were declared)
+                        (``vector_id`` being the ``matrix_id`` used when the factors were declared).
+                        A monitored function has ONE cotangent whichever matrices declare it: when several
+                        factor matrices monitor the same function — the usual shape when fusing lever families,
+                        each pairing the same functions with its own variables — the repeated entries must
+                        agree, and 0.0 reads as "not stated here". Conflicting non-zero values raise rather
+                        than being summed into a gradient that is silently a multiple of the right one.
             parameters: The sensitivity parameters
             provider:   Name of the sensitivity analysis provider
 
