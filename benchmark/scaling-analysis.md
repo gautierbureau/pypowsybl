@@ -270,10 +270,35 @@ by (network, variant) instead of a list scanned without the lock - removes it: t
 pool sweeps and three asyncio sweeps run clean.
 
 One asyncio sweep out of six still hit the same exception afterwards, so a second race
-remains. The prime suspect is `VariantManagerImpl` in powsybl-core, which has no locking at
-all, exercised by the cached load flow path creating and removing a temporary variant per run
-(`LfNetworkList.DefaultVariantCleaner`). It could not be reproduced from pure java (16 threads
-x 200 runs, and variant churn rounds, all clean), so it needs the pypowsybl call pattern.
+remains - a different one, now identified from a captured java stack:
+
+```
+java.util.ConcurrentModificationException
+  at java.util.LinkedHashMap$LinkedHashIterator.nextNode
+  ...
+  at ReferenceTerminalsImpl.unregisterReferencedTerminalIfNeeded(ReferenceTerminalsImpl.java:41)
+  at ReferenceTerminalsImpl.setTerminalsAndUpdateReferences(ReferenceTerminalsImpl.java:59)
+  at ReferenceTerminalsImpl.reset(ReferenceTerminalsImpl.java:93)
+  at ReferenceTerminals.reset(ReferenceTerminals.java:53)
+  at OpenLoadFlowProvider.runAc(OpenLoadFlowProvider.java:158)
+```
+
+`ReferenceTerminalsImpl` in powsybl-core keeps an `ArrayList<Set<Terminal>> terminalsPerVariant`
+whose per-variant sets are reference counted by scanning **all** the variants
+(`terminalsPerVariant.stream().flatMap(Collection::stream)`), with no synchronization, while
+another thread adds to or replaces its own variant's set. OpenLoadFlow calls
+`ReferenceTerminals.reset(network)` after every AC run when `writeReferenceTerminals` is on,
+which is the default, so two load flows running on two variants of the same network race on
+that shared list.
+
+The variant manager, suspected first, is not involved: a probe watching `get_variant_ids()`
+during a run shows no variant is created or removed while the workers run, and OpenLoadFlow
+only clones a temporary variant for breaker/topology cases (`Networks.java:243`).
+
+Workaround for the affected scenario: the OpenLoadFlow provider parameter
+`writeReferenceTerminals=false` skips that path entirely. The race is rare - one occurrence in
+about twenty sweeps, and not reproducible on demand in 82000 load flows of targeted stress -
+but it is plainly unsafe by inspection.
 
 ### Comparison with the parallel_loadflow_*.py sweep scripts
 
