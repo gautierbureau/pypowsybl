@@ -25,14 +25,15 @@ class GraalVmGuard {
 public:
     GraalVmGuard();
 
-    ~GraalVmGuard() noexcept(false);
+    // No per-guard detach: the calling thread stays attached to the isolate until it exits (see the
+    // thread_local in powsybl-cpp.cpp), so guards are cheap to construct and destroy.
+    ~GraalVmGuard() = default;
 
     graal_isolatethread_t * thread() const {
         return thread_;
     }
 
 private:
-    bool shouldDetach = false;
     graal_isolatethread_t* thread_ = nullptr;
 };
 
