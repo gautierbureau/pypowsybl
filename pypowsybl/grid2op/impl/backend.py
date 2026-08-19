@@ -36,6 +36,9 @@ class Backend:
                                                          self._check_isolated_and_disconnected_injections,
                                                          self._buses_per_voltage_level,
                                                          self._connect_all_elements_to_first_bus)
+        # Cached default C load flow parameters, reused across run_pf() calls to avoid a native round trip
+        # (createLoadFlowParameters reads platform config from Java) on every step of the RL loop.
+        self._default_c_lf_params: Optional[Any] = None
 
     @property
     def network(self) -> Network:
@@ -71,6 +74,7 @@ class Backend:
                                                          self._check_isolated_and_disconnected_injections,
                                                          self._buses_per_voltage_level,
                                                          self._connect_all_elements_to_first_bus)
+        self._default_c_lf_params = None
 
     def get_string_value(self, value_type: Grid2opStringValueType) -> np.ndarray:
         return np.array(_pypowsybl.get_grid2op_string_value(self._handle, value_type))
@@ -91,7 +95,14 @@ class Backend:
         return _pypowsybl.check_grid2op_isolated_and_disconnected_injections(self._handle)
 
     def run_pf(self, dc: bool = False, parameters: Optional[Parameters] = None, report_node: Optional[ReportNode] = None) -> List[ComponentResult]:
-        p = parameters._to_c_parameters() if parameters is not None else _pypowsybl.LoadFlowParameters()  # pylint: disable=protected-access
+        if parameters is not None:
+            p = parameters._to_c_parameters()  # pylint: disable=protected-access
+        else:
+            # Reuse the cached default parameters across steps instead of building them from scratch
+            # (a native call into Java) on every run_pf.
+            if self._default_c_lf_params is None:
+                self._default_c_lf_params = _pypowsybl.LoadFlowParameters()
+            p = self._default_c_lf_params
         p.dc = dc
         return [ComponentResult(res) for res in _pypowsybl.run_grid2op_loadflow(self._handle, p,
                                                                                 report_node._report_node if report_node is not None else None)]

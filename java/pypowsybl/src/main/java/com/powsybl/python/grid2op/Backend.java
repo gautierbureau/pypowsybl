@@ -361,10 +361,16 @@ public class Backend implements Closeable {
     private static int[] computeTopoVectPosition(ArrayPointer<CIntPointer> toVoltageLevelNum,
                                                  int[] toVoltageLevelPosition,
                                                  int[] maxVoltageLevelPosition) {
+        // prefix sum: cumulativePosition[k] = number of elements in all voltage levels before k.
+        // Precomputed once (O(V)) instead of being re-summed for every element (O(elements x V)).
+        int[] cumulativePosition = new int[maxVoltageLevelPosition.length + 1];
+        for (int k = 0; k < maxVoltageLevelPosition.length; k++) {
+            cumulativePosition[k + 1] = cumulativePosition[k] + maxVoltageLevelPosition[k];
+        }
         int[] res = new int[toVoltageLevelNum.getLength()];
         for (int i = 0; i < toVoltageLevelNum.getLength(); i++) {
             int voltageLevelNum = toVoltageLevelNum.getPtr().read(i);
-            int objBefore = Arrays.stream(maxVoltageLevelPosition, 0, voltageLevelNum).sum();
+            int objBefore = cumulativePosition[voltageLevelNum];
             res[i] = objBefore + toVoltageLevelPosition[i];
         }
         return res;
@@ -415,6 +421,10 @@ public class Backend implements Closeable {
             }
             // then we can update topo vect
             updateTopoVect();
+            // changes have been applied to IIDM and bus global nums recomputed, so we can drop them
+            // to avoid replaying the whole accumulated history on every subsequent call (which would
+            // make the cost grow quadratically with the number of steps in an episode)
+            topoChanges.clear();
         }
     }
 
@@ -858,7 +868,6 @@ public class Backend implements Closeable {
     }
 
     public LoadFlowResult runLoadFlow(LoadFlowParameters parameters, ReportNode reportNode) {
-        checkIsolatedAndDisconnectedInjections();
         ensureTopoVectIsUpToDate();
         LoadFlowRunParameters runParameters = new LoadFlowRunParameters()
                 .setParameters(parameters)
