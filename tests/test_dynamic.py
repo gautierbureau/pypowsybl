@@ -130,6 +130,43 @@ def test_dynamic_dataframe():
         data=[('DM_TCB', 'B4')])
     model_mapping.add_tap_changer_blocking_automation_system(tcb_df, tfo_df, measurement1_df, measurement2_df)
 
+def test_add_criteria():
+    criteria = dyn.Criteria()
+    criteria.add(
+        criteria=pd.DataFrame.from_records(
+            index='id',
+            columns=['id', 'kind', 'scope', 'type', 'p_min', 'p_max'],
+            data=[('GEN_CRIT', 'GENERATOR', 'FINAL', 'SUM', 100.0, 500.0),
+                  ('BUS_CRIT', 'BUS', 'DYNAMIC', 'LOCAL_VALUE', float('nan'), float('nan'))]),
+        voltage_levels=pd.DataFrame.from_records(
+            index='criteria_id',
+            columns=['criteria_id', 'u_min_pu', 'u_max_pu', 'u_nom_min', 'u_nom_max'],
+            data=[('GEN_CRIT', 0.8, 1.2, 90.0, 110.0),
+                  ('BUS_CRIT', 0.9, float('nan'), float('nan'), float('nan'))]),
+        components=pd.DataFrame.from_records(
+            index='criteria_id',
+            columns=['criteria_id', 'id', 'voltage_level_id'],
+            data=[('GEN_CRIT', 'G1', 'VL1'),
+                  ('GEN_CRIT', 'G2', ''),
+                  ('BUS_CRIT', 'B1', 'VL2')]),
+        countries=pd.DataFrame.from_records(
+            index='criteria_id',
+            columns=['criteria_id', 'country'],
+            data=[('GEN_CRIT', 'FR'), ('GEN_CRIT', 'BE')]))
+    # the four tables ship through the native binding into the criteria collection without error
+    assert criteria._handle is not None
+
+
+def test_add_criteria_only_the_criteria_table():
+    # only the criteria table is given; the other three are taken as empty (built from their metadata)
+    criteria = dyn.Criteria()
+    criteria.add(pd.DataFrame.from_records(
+        index='id',
+        columns=['id', 'kind', 'scope', 'type'],
+        data=[('LOAD_CRIT', 'LOAD', 'FINAL', 'SUM')]))
+    assert criteria._handle is not None
+
+
 def test_events_information():
     event_mapping = dyn.EventMapping()
     info_df = event_mapping.get_events_information()
