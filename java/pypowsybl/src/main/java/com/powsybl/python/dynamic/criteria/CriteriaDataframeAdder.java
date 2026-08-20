@@ -114,7 +114,7 @@ public final class CriteriaDataframeAdder {
         Map<String, List<String>> countries = readCountries(dataframes.get(3));
 
         CriteriaCollection collection = criteria.getCollection();
-        if (criteriaDataframe.getRowCount() == 0) {
+        if (criteriaDataframe == null || criteriaDataframe.getRowCount() == 0) {
             return;
         }
         StringSeries ids = getRequiredStrings(criteriaDataframe, ID);
@@ -152,7 +152,7 @@ public final class CriteriaDataframeAdder {
 
     private static Map<String, List<CriteriaParamsVoltageLevel>> readVoltageLevels(UpdatingDataframe dataframe) {
         Map<String, List<CriteriaParamsVoltageLevel>> byCriteria = new LinkedHashMap<>();
-        if (dataframe.getRowCount() == 0) {
+        if (dataframe == null || dataframe.getRowCount() == 0) {
             return byCriteria;
         }
         StringSeries criteriaIds = getRequiredStrings(dataframe, CRITERIA_ID);
@@ -181,7 +181,7 @@ public final class CriteriaDataframeAdder {
 
     private static Map<String, List<Criteria.ComponentRef>> readComponents(UpdatingDataframe dataframe) {
         Map<String, List<Criteria.ComponentRef>> byCriteria = new LinkedHashMap<>();
-        if (dataframe.getRowCount() == 0) {
+        if (dataframe == null || dataframe.getRowCount() == 0) {
             return byCriteria;
         }
         StringSeries criteriaIds = getRequiredStrings(dataframe, CRITERIA_ID);
@@ -197,7 +197,7 @@ public final class CriteriaDataframeAdder {
 
     private static Map<String, List<String>> readCountries(UpdatingDataframe dataframe) {
         Map<String, List<String>> byCriteria = new LinkedHashMap<>();
-        if (dataframe.getRowCount() == 0) {
+        if (dataframe == null || dataframe.getRowCount() == 0) {
             return byCriteria;
         }
         StringSeries criteriaIds = getRequiredStrings(dataframe, CRITERIA_ID);

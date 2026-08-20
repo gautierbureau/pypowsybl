@@ -13,6 +13,7 @@ from pypowsybl.utils import create_data_frame_from_series_array
 from pypowsybl.report import ReportNode
 from .event_mapping import EventMapping
 from .model_mapping import ModelMapping
+from .criteria import Criteria
 from .simulation_result import SimulationResult
 from .output_variable_mapping import OutputVariableMapping
 from .parameters import Parameters
@@ -27,6 +28,7 @@ class Simulation:  # pylint: disable=too-few-public-methods
             model_mapping: ModelMapping,
             event_mapping: Optional[EventMapping] = None,
             timeseries_mapping: Optional[OutputVariableMapping] = None,
+            criteria: Optional[Criteria] = None,
             parameters: Optional[Parameters] = None,
             report_node: Optional[ReportNode] = None
             ) -> SimulationResult:
@@ -42,6 +44,7 @@ class Simulation:  # pylint: disable=too-few-public-methods
                     model_mapping._handle, # pylint: disable=protected-access
                     None if event_mapping is None else event_mapping._handle, # pylint: disable=protected-access
                     None if timeseries_mapping is None else timeseries_mapping._handle, # pylint: disable=protected-access
+                    None if criteria is None else criteria._handle, # pylint: disable=protected-access
                     parameters._to_c_parameters() if parameters is not None else _pp.DynamicSimulationParameters(), # pylint: disable=protected-access
                     None if report_node is None else report_node._report_node) # pylint: disable=protected-access
         )
