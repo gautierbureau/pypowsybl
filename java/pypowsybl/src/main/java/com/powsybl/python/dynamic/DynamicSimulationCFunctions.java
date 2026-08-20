@@ -67,6 +67,8 @@ import com.powsybl.python.commons.PyPowsyblApiHeader.DataframeMetadataPointer;
 import com.powsybl.python.commons.PyPowsyblApiHeader.DataframePointer;
 import com.powsybl.python.commons.PyPowsyblApiHeader.SeriesPointer;
 import com.powsybl.python.commons.Util;
+import com.powsybl.python.dynamic.criteria.CriteriaDataframeAdder;
+import com.powsybl.python.dynamic.criteria.PythonCriteria;
 
 import static com.powsybl.python.commons.PyPowsyblApiHeader.*;
 
@@ -380,6 +382,7 @@ public final class DynamicSimulationCFunctions {
                                                     ObjectHandle dynamicMappingHandle,
                                                     ObjectHandle eventModelsSupplierHandle,
                                                     ObjectHandle outputVariablesSupplierHandle,
+                                                    ObjectHandle criteriaHandle,
                                                     DynamicSimulationParametersPointer parametersPtr,
                                                     ObjectHandle reportNodeHandle,
                                                     ExceptionHandlerPointer exceptionHandlerPtr) {
@@ -416,6 +419,15 @@ public final class DynamicSimulationCFunctions {
                     runParameters.setExtendable(null);
                     dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
                 });
+                // a typed criteria model, when given, is set on the Dynawo parameters, after the mapping's
+                // own run parameters have been attached above, so it reaches whichever extension the run
+                // ends up with; it takes precedence over any criteria.file, and a null handle leaves the
+                // criteria untouched.
+                PythonCriteria criteria = ObjectHandles.getGlobal().get(criteriaHandle);
+                if (criteria != null) {
+                    dynamicSimulationParameters.getExtension(DynawoSimulationParameters.class)
+                            .setCriteria(criteria.getCollection());
+                }
                 DynamicSimulationResult result = dynamicContext.run(network,
                         dynamicMapping,
                         eventModelsSupplier,
@@ -504,6 +516,50 @@ public final class DynamicSimulationCFunctions {
                 String categoryName = CTypeUtil.toString(categoryNamePtr);
                 List<List<SeriesMetadata>> metadata = DynamicMappingHandler.getMetadata(categoryName);
                 DataframeMetadataPointer dataframeMetadataArray = UnmanagedMemory.calloc(metadata.size() * SizeOf.get(DataframeMetadataPointer.class));
+                int i = 0;
+                for (List<SeriesMetadata> dataframeMetadata : metadata) {
+                    CTypeUtil.createSeriesMetadata(dataframeMetadata, dataframeMetadataArray.addressOf(i));
+                    i++;
+                }
+                DataframesMetadataPointer res = UnmanagedMemory.calloc(SizeOf.get(DataframesMetadataPointer.class));
+                res.setDataframesMetadata(dataframeMetadataArray);
+                res.setDataframesCount(metadata.size());
+                return res;
+            }
+        });
+    }
+
+    @CEntryPoint(name = "createCriteria")
+    public static ObjectHandle createCriteria(IsolateThread thread, ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, () -> ObjectHandles.getGlobal().create(new PythonCriteria()));
+    }
+
+    @CEntryPoint(name = "addCriteria")
+    public static void addCriteria(IsolateThread thread, ObjectHandle criteriaHandle,
+                                   DataframeArrayPointer criteriaDataframePtr,
+                                   ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonCriteria criteria = ObjectHandles.getGlobal().get(criteriaHandle);
+                List<UpdatingDataframe> criteriaDataframes = new ArrayList<>();
+                for (int i = 0; i < criteriaDataframePtr.getDataframesCount(); i++) {
+                    criteriaDataframes.add(createDataframe(criteriaDataframePtr.getDataframes().addressOf(i)));
+                }
+                CriteriaDataframeAdder.addElements(criteria, criteriaDataframes);
+            }
+        });
+    }
+
+    @CEntryPoint(name = "getCriteriaMetaData")
+    public static DataframesMetadataPointer getCriteriaMetaData(IsolateThread thread,
+                                                                ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<>() {
+            @Override
+            public DataframesMetadataPointer get() {
+                List<List<SeriesMetadata>> metadata = CriteriaDataframeAdder.getMetadata();
+                DataframeMetadataPointer dataframeMetadataArray = UnmanagedMemory.calloc(
+                        metadata.size() * SizeOf.get(DataframeMetadataPointer.class));
                 int i = 0;
                 for (List<SeriesMetadata> dataframeMetadata : metadata) {
                     CTypeUtil.createSeriesMetadata(dataframeMetadata, dataframeMetadataArray.addressOf(i));
