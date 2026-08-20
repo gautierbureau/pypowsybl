@@ -1800,10 +1800,15 @@ JavaHandle createEventMapping() {
     return PowsyblCaller::get()->callJava<JavaHandle>(::createEventMapping);
 }
 
-JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle network, JavaHandle dynamicMapping, JavaHandle* eventMapping, JavaHandle* timeSeriesMapping, DynamicSimulationParameters& parameters, JavaHandle* reportNode) {
+JavaHandle createCriteria() {
+    return PowsyblCaller::get()->callJava<JavaHandle>(::createCriteria);
+}
+
+JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle network, JavaHandle dynamicMapping, JavaHandle* eventMapping, JavaHandle* timeSeriesMapping, JavaHandle* criteria, DynamicSimulationParameters& parameters, JavaHandle* reportNode) {
     auto c_parameters  = parameters.to_c_struct();
     return PowsyblCaller::get()->callJava<JavaHandle>(::runDynamicSimulation, dynamicModelContext, network, dynamicMapping,
     (eventMapping == nullptr) ? nullptr : *eventMapping, (timeSeriesMapping == nullptr) ? nullptr : *timeSeriesMapping,
+    (criteria == nullptr) ? nullptr : *criteria,
     c_parameters.get(), (reportNode == nullptr) ? nullptr : *reportNode);
 }
 
@@ -1948,6 +1953,10 @@ void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryNam
     PowsyblCaller::get()->callJava<>(::addDynamicMappings, dynamicMappingHandle, (char*) categoryName.c_str(), dataframes);
 }
 
+void addCriteria(JavaHandle criteriaHandle, dataframe_array* dataframes) {
+    PowsyblCaller::get()->callJava<>(::addCriteria, criteriaHandle, dataframes);
+}
+
 void addEventMappings(JavaHandle eventMappingHandle, std::string eventName, dataframe* mappingDf) {
     PowsyblCaller::get()->callJava<>(::addEventMappings, eventMappingHandle, (char*) eventName.c_str(), mappingDf);
 }
@@ -2007,6 +2016,16 @@ std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string 
         }
         pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, metadata);
         return res;
+}
+
+std::vector<std::vector<SeriesMetadata>> getCriteriaMetaData() {
+    dataframes_metadata* metadata = pypowsybl::PowsyblCaller::get()->callJava<dataframes_metadata*>(::getCriteriaMetaData);
+    std::vector<std::vector<SeriesMetadata>> res;
+    for (int i = 0; i < metadata->dataframes_count; i++) {
+        res.push_back(convertDataframeMetadata(metadata->dataframes_metadata + i));
+    }
+    pypowsybl::PowsyblCaller::get()->callJava(::freeDataframesMetadata, metadata);
+    return res;
 }
 
 std::vector<SeriesMetadata> getEventMappingsMetaData(std::string eventName) {
