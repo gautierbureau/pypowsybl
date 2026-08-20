@@ -154,6 +154,11 @@ void addDynamicMappingsBind(pypowsybl::JavaHandle dynamic_mapping_handle, std::s
     pypowsybl::addDynamicMappings(dynamic_mapping_handle, category_name, dataframeArray.get());
 }
 
+void addCriteriaBind(pypowsybl::JavaHandle criteria_handle, const std::vector<dataframe*>& dataframes) {
+    std::shared_ptr<dataframe_array> dataframeArray = ::createDataframeArray(dataframes);
+    pypowsybl::addCriteria(criteria_handle, dataframeArray.get());
+}
+
 template<typename T>
 py::array seriesAsNumpyArray(const series& series) {
 	//Last argument is to bind lifetime of series to the returned array
@@ -205,15 +210,20 @@ void dynamicSimulationBindings(py::module_& m) {
     m.def("create_dynamic_model_mapping", &pypowsybl::createDynamicModelMapping);
     m.def("create_timeseries_mapping", &pypowsybl::createTimeseriesMapping);
     m.def("create_event_mapping", &pypowsybl::createEventMapping);
+    m.def("create_criteria", &pypowsybl::createCriteria);
 
     //running simulations
     m.def("run_dynamic_simulation", &pypowsybl::runDynamicSimulation, py::call_guard<py::gil_scoped_release>(),
-        py::arg("dynamic_model"), py::arg("network"), py::arg("dynamic_mapping"), py::arg("event_mapping"), py::arg("timeseries_mapping"), py::arg("parameters"), py::arg("report_node"));
+        py::arg("dynamic_model"), py::arg("network"), py::arg("dynamic_mapping"), py::arg("event_mapping"), py::arg("timeseries_mapping"), py::arg("criteria"), py::arg("parameters"), py::arg("report_node"));
 
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));
     m.def("get_dynamic_mappings_meta_data", &pypowsybl::getDynamicMappingsMetaData, py::arg("category_name"));
     m.def("get_categories", &pypowsybl::getCategories);
+
+    //criteria
+    m.def("add_criteria", ::addCriteriaBind, py::arg("criteria_handle"), py::arg("dataframes"));
+    m.def("get_criteria_meta_data", &pypowsybl::getCriteriaMetaData);
     m.def("get_categories_information", &pypowsybl::getCategoriesInformation);
     m.def("get_supported_models", &pypowsybl::getSupportedModels, py::arg("category_name"));
     m.def("get_supported_models_information", &pypowsybl::getSupportedModelsInformation, py::arg("category_name"));

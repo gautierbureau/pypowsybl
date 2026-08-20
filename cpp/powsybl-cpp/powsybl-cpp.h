@@ -995,7 +995,9 @@ JavaHandle createDynamicModelMapping();
 JavaHandle createTimeseriesMapping();
 JavaHandle createEventMapping();
 
-JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle network, JavaHandle dynamicMapping, JavaHandle* eventMapping, JavaHandle* timeSeriesMapping, DynamicSimulationParameters& parameters, JavaHandle* reportNode);
+JavaHandle createCriteria();
+
+JavaHandle runDynamicSimulation(JavaHandle dynamicModelContext, JavaHandle network, JavaHandle dynamicMapping, JavaHandle* eventMapping, JavaHandle* timeSeriesMapping, JavaHandle* criteria, DynamicSimulationParameters& parameters, JavaHandle* reportNode);
 
 // timeseries mapping
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType);
@@ -1008,6 +1010,8 @@ SeriesArray* getEventsInformation();
 // dynamic model mapping
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes);
 std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string categoryName);
+void addCriteria(JavaHandle criteriaHandle, dataframe_array* dataframes);
+std::vector<std::vector<SeriesMetadata>> getCriteriaMetaData();
 std::vector<std::string> getCategories();
 SeriesArray* getCategoriesInformation();
 std::vector<std::string> getSupportedModels(std::string categoryName);
