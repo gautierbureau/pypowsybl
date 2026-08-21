@@ -404,6 +404,11 @@ public final class DynamicSimulationCFunctions {
                 if (reportNode == null) {
                     reportNode = ReportNode.NO_OP;
                 }
+                // the study's own provider parameters (symbolicJacobian, precision, modelSimplifiers, ...),
+                // already applied to the parameters built here, are kept so they can be re-applied on top
+                // of the mapping's run parameters below, which would otherwise replace the whole extension
+                Map<String, String> providerParameters =
+                        DynamicSimulationParametersCUtils.getSpecificParameters(parametersPtr);
                 DynamicSimulationParameters dynamicSimulationParameters =
                         DynamicSimulationParametersCUtils.createDynamicSimulationParameters(parametersPtr);
                 // the models are built first, so that the sets derived for them are known
@@ -417,6 +422,12 @@ public final class DynamicSimulationCFunctions {
                     // reused, but an extension holds to one extendable, so the same mapping run
                     // again, a value changed between runs as in a sweep, would fail to attach them
                     runParameters.setExtendable(null);
+                    // the mapping's run parameters carry its network/solver settings; the study's provider
+                    // parameters are merged on top so a value set from Python still reaches the jobs
+                    // (update only touches the keys given, leaving the mapping's other settings intact)
+                    if (!providerParameters.isEmpty()) {
+                        runParameters.update(providerParameters);
+                    }
                     dynamicSimulationParameters.addExtension(DynawoSimulationParameters.class, runParameters);
                 });
                 // a typed criteria model, when given, is set on the Dynawo parameters, after the mapping's

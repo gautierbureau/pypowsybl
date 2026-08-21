@@ -107,7 +107,7 @@ public final class DynamicSimulationParametersCUtils {
         return specificParameters;
     }
 
-    private static Map<String, String> getSpecificParameters(DynamicSimulationParametersPointer parametersPointer) {
+    public static Map<String, String> getSpecificParameters(DynamicSimulationParametersPointer parametersPointer) {
         return CTypeUtil.toStringMap(parametersPointer.getProviderParameters().getProviderParametersKeys(),
                 parametersPointer.getProviderParameters().getProviderParametersKeysCount(),
                 parametersPointer.getProviderParameters().getProviderParametersValues(),
