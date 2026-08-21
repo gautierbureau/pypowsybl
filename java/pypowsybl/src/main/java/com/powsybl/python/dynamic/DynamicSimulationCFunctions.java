@@ -264,13 +264,18 @@ public final class DynamicSimulationCFunctions {
     public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMappedModels(IsolateThread thread,
                                                                                  ObjectHandle dynamicMappingHandle,
                                                                                  ObjectHandle networkHandle,
+                                                                                 ObjectHandle reportNodeHandle,
                                                                                  ExceptionHandlerPointer exceptionHandlerPtr) {
         return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
             @Override
             public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
                 PythonDynamicModelsSupplier supplier = ObjectHandles.getGlobal().get(dynamicMappingHandle);
                 Network network = ObjectHandles.getGlobal().get(networkHandle);
-                List<BlackBoxModel> models = supplier.get(network, ReportNode.NO_OP).stream()
+                ReportNode reportNode = ReportCUtils.getReportNode(reportNodeHandle);
+                if (reportNode == null) {
+                    reportNode = ReportNode.NO_OP;
+                }
+                List<BlackBoxModel> models = supplier.get(network, reportNode).stream()
                         .filter(BlackBoxModel.class::isInstance)
                         .map(BlackBoxModel.class::cast)
                         .toList();

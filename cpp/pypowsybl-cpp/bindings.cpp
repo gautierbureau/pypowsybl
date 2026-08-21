@@ -244,7 +244,7 @@ void dynamicSimulationBindings(py::module_& m) {
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));
     m.def("update_all_dynamic_mappings", ::updateDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"), py::arg("strict"));
-    m.def("get_mapped_models", &pypowsybl::getMappedModels, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
+    m.def("get_mapped_models", &pypowsybl::getMappedModels, py::arg("dynamic_mapping_handle"), py::arg("network_handle"), py::arg("report_node"));
     m.def("get_mapped_parameters", &pypowsybl::getMappedParameters, py::arg("dynamic_mapping_handle"));
     m.def("get_parameter_completions", &pypowsybl::getParameterCompletions, py::arg("dynamic_mapping_handle"), py::arg("network_handle"));
     m.def("update_mapped_parameter", &pypowsybl::updateMappedParameter, py::arg("dynamic_mapping_handle"),

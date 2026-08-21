@@ -1896,8 +1896,8 @@ void loadMappedParameters(JavaHandle dynamicMappingHandle, std::string parameter
     PowsyblCaller::get()->callJava<>(::loadMappedParameters, dynamicMappingHandle, (char*) parametersFile.c_str());
 }
 
-SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle) {
-    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedModels, dynamicMappingHandle, networkHandle));
+SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, JavaHandle* reportNode) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMappedModels, dynamicMappingHandle, networkHandle, (reportNode == nullptr) ? nullptr : *reportNode));
 }
 
 void updateDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes, int strict) {

@@ -9,6 +9,7 @@ from numpy.typing import ArrayLike
 from pandas import DataFrame
 from pypowsybl import _pypowsybl as _pp
 from pypowsybl.network import Network
+from pypowsybl.report import ReportNode
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 from .model_config import ModelConfig, _to_c_dataframe  # pylint: disable=protected-access
 
@@ -138,20 +139,22 @@ class ModelMapping:
         _pp.update_all_dynamic_mappings(self._handle, category_name, c_dfs,
                                         -1 if strict is None else int(strict))
 
-    def get_models(self, network: Network) -> DataFrame:
+    def get_models(self, network: Network, report_node: Optional[ReportNode] = None) -> DataFrame:
         """
         What this mapping makes of the network: the model standing for each equipment and the
         parameter set valuing it.
 
         Args:
             network: the network the models are built against
+            report_node: the reporter to be used to create an execution report, default is None (no report)
 
         Returns:
             a dataframe indexed by dynamic model id, holding the static id of the equipment, the
             model and its parameter set
         """
         return create_data_frame_from_series_array(
-            _pp.get_mapped_models(self._handle, network._handle))  # pylint: disable=protected-access
+            _pp.get_mapped_models(self._handle, network._handle,  # pylint: disable=protected-access
+                                  None if report_node is None else report_node._report_node))  # pylint: disable=protected-access
 
     def get_parameters(self) -> DataFrame:
         """

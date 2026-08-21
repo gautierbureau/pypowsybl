@@ -1047,7 +1047,7 @@ std::vector<std::string> getDynamicMappingExtensionNames();
 
 std::vector<std::string> getDynamicMappingExtensionProviders(std::string extensionName);
 
-SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle);
+SeriesArray* getMappedModels(JavaHandle dynamicMappingHandle, JavaHandle networkHandle, JavaHandle* reportNode);
 
 SeriesArray* getMappedParameters(JavaHandle dynamicMappingHandle);
 
