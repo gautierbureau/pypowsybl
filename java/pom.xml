@@ -119,6 +119,21 @@
                 <artifactId>powsybl-dynawo-extensions-serde</artifactId>
                 <version>${powsybl-dynawo.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-algorithms-commons</artifactId>
+                <version>${powsybl-dynawo.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-security-analysis</artifactId>
+                <version>${powsybl-dynawo.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-dynawo-margin-calculation</artifactId>
+                <version>${powsybl-dynawo.version}</version>
+            </dependency>
             <!-- the tap changer blockings iidm extension lives in a build of powsybl-core newer
                  than the one powsybl-dependencies declares; pin the modules that carry it, or the
                  released core clobbers those classes -->
