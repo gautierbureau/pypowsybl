@@ -854,6 +854,10 @@ std::shared_ptr<matrix> getSensitivityMatrix(const JavaHandle& sensitivityAnalys
 
 std::shared_ptr<matrix> getReferenceMatrix(const JavaHandle& sensitivityAnalysisResultContext, const std::string& matrixId, const std::string& contingencyId);
 
+JavaHandle runSensitivityAnalysisAdjoint(const JavaHandle& sensitivityAnalysisContext, const JavaHandle& network, const std::vector<double>& cotangents, SensitivityAnalysisParameters& parameters, const std::string& provider);
+
+matrix* getGradient(const JavaHandle& sensitivityAnalysisAdjointResultContext, const std::string& vectorId);
+
 SeriesArray* createNetworkElementsSeriesArray(const JavaHandle& network, element_type elementType, filter_attributes_type filterAttributesType, const std::vector<std::string>& attributes, dataframe* dataframe, bool perUnit, double nominalApparentPower);
 
 void removeNetworkElements(const JavaHandle& network, const std::vector<std::string>& elementIds);
