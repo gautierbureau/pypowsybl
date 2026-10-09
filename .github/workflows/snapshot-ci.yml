@@ -349,6 +349,28 @@ jobs:
           & "$env:USERPROFILE\miniconda\Scripts\conda.exe" install -c conda-forge ipopt==3.14.19 mumps==5.1.2 -y
           echo "PATH=$env:USERPROFILE\miniconda\Library\bin;$env:PATH" >> $env:GITHUB_ENV
 
+      # Profile-Guided Optimization (Phase 2: Linux snapshot wheels only, for validation).
+      # Generates a profile from an instrumented executable; the wheel build below picks it up via
+      # PYPOWSYBL_PGO_PROFILE. continue-on-error + the file guard mean a profiling hiccup silently
+      # falls back to a normal (non-PGO) build - it never breaks the nightly.
+      - name: Generate PGO profile (Linux)
+        if: matrix.config.name == 'ubuntu'
+        continue-on-error: true
+        working-directory: ./pypowsybl
+        run: |
+          PGO_BUILD_CMD=true scripts/build-pgo.sh
+          if [ -f build/pgo/pypowsybl.iprof ]; then
+            echo "PYPOWSYBL_PGO_PROFILE=$(pwd)/build/pgo/pypowsybl.iprof" >> $GITHUB_ENV
+          fi
+
+      - name: Upload PGO profile (Linux)
+        if: matrix.config.name == 'ubuntu' && hashFiles('pypowsybl/build/pgo/pypowsybl.iprof') != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: pgo-profile-${{ matrix.config.name }}-${{ matrix.python.name }}
+          retention-days: 3
+          path: ./pypowsybl/build/pgo/pypowsybl.iprof
+
       - name: Build wheel
         run: python3 setup.py bdist_wheel
         working-directory: ./pypowsybl

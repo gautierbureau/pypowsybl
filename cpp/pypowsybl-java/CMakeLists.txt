@@ -94,13 +94,23 @@ else()
     set(NATIVE_IMAGE_GC "serial")
 endif()
 
+set(NATIVE_IMAGE_COMMAND $ENV{JAVA_HOME}/bin/native-image ${NATIVE_IMAGE_BUILD_OPTIONS} --class-path ${PYPOWSYBL_JAVA_SRC_DIR}/target/pypowsybl-java.jar${EXTRA_JARS} -march=compatibility --no-fallback --shared --gc=${NATIVE_IMAGE_GC} -o pypowsybl-java -H:CLibraryPath=${CMAKE_CURRENT_SOURCE_DIR} --add-exports=org.graalvm.nativeimage.builder/com.oracle.svm.core.c=ALL-UNNAMED)
+
+# Optional Profile-Guided Optimization: pass -DPYPOWSYBL_PGO_PROFILE=<path> (or set the
+# PYPOWSYBL_PGO_PROFILE environment variable) with a profile collected by scripts/build-pgo.sh.
+# Requires Oracle GraalVM. When unset, the native image is built exactly as before.
+if(PYPOWSYBL_PGO_PROFILE)
+    message(STATUS "Building native image with PGO profile: ${PYPOWSYBL_PGO_PROFILE}")
+    list(APPEND NATIVE_IMAGE_COMMAND --pgo=${PYPOWSYBL_PGO_PROFILE})
+endif()
+
 # as GraalVm does not follow same library naming convention (lib prefix is missing on Linux and MacOS) we need to rename
 # it in the install command step
 ExternalProject_Add(native-image
     DEPENDS mvn
     SOURCE_DIR ${PYPOWSYBL_JAVA_BIN_DIR}
     DOWNLOAD_COMMAND ""
-    PATCH_COMMAND $ENV{JAVA_HOME}/bin/native-image ${NATIVE_IMAGE_BUILD_OPTIONS} --class-path ${PYPOWSYBL_JAVA_SRC_DIR}/target/pypowsybl-java.jar${EXTRA_JARS} -march=compatibility --no-fallback --shared --gc=${NATIVE_IMAGE_GC} -o pypowsybl-java -H:CLibraryPath=${CMAKE_CURRENT_SOURCE_DIR} --add-exports=org.graalvm.nativeimage.builder/com.oracle.svm.core.c=ALL-UNNAMED
+    PATCH_COMMAND ${NATIVE_IMAGE_COMMAND}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ${CMAKE_COMMAND} -E copy ${PYPOWSYBL_JAVA_BIN_DIR}/${PYPOWSYBL_JAVA_OLD_LIB} ${PYPOWSYBL_JAVA_BIN_DIR}/${PYPOWSYBL_JAVA_LIB} ${NATIVE_IMAGE_INSTALL_EXTRA_COMMAND}

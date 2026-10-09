@@ -47,6 +47,11 @@ class PyPowsyblBuild(build_ext):
         cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
                       '-DPython_EXECUTABLE=' + sys.executable]
 
+        # Optional Profile-Guided Optimization: forward a profile collected by scripts/build-pgo.sh
+        # (Oracle GraalVM only) to the native-image build. No effect on a normal build.
+        if os.environ.get('PYPOWSYBL_PGO_PROFILE'):
+            cmake_args += ['-DPYPOWSYBL_PGO_PROFILE=' + os.environ['PYPOWSYBL_PGO_PROFILE']]
+
         cfg = 'Debug' if self.debug else 'Release'
         build_args = ['--config', cfg]
 
