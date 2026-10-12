@@ -9,7 +9,7 @@
 """
 Training workload for the profile-guided optimization (PGO) of the pypowsybl native image.
 
-The workload covers CGMES import, load flow, and the network dataframe read and update paths, the rest of the
+The workload covers CGMES and XIIDM import, load flow, and the network dataframe read and update paths, the rest of the
 code paths will not be optimized. On CGMES import, a major performance boost can be observed due to heavy
 branching logic, loadflow is less affected.
 Dataframe reads and updates (get_buses, update_loads...) also benefit from the profile.
@@ -22,6 +22,7 @@ import io
 import os
 import sys
 import time
+import urllib.request
 from pathlib import Path
 from typing import List
 
@@ -33,6 +34,15 @@ DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
 CGMES_CASES = [
     'CGMES_Full.zip',
     'MicroGridTestConfiguration_T4_BE_BB_Complete_v2.zip',
+]
+
+# Real-size transmission grids, too big to be bundled in the repository: they are downloaded (pinned to a commit)
+# and cached. The bundled cases are tiny, these give the load flow and dataframe paths a representative profile.
+LARGE_NETWORKS_URL = 'https://raw.githubusercontent.com/gautierbureau/test2/6ade0a4406a630977faa2338e886c5992da8da12/python/data/{}'
+LARGE_NETWORKS = [
+    'rte6515_full.xiidm.gz',
+    'pegase9241_full.xiidm.gz',
+    'pegase13659_full.xiidm.gz',
 ]
 
 
@@ -97,7 +107,23 @@ def run_dataframes(network: pp.network.Network, rounds: int) -> None:
         update_dataframes(network)
 
 
-def iteration(extra_cases: List[Path], dataframe_rounds: int) -> None:
+def fetch_large_networks(network_dir: Path) -> List[Path]:
+    network_dir.mkdir(parents=True, exist_ok=True)
+    files = []
+    for name in LARGE_NETWORKS:
+        file = network_dir / name
+        if not file.exists():
+            url = LARGE_NETWORKS_URL.format(name)
+            print(f'downloading {url}')
+            tmp_file = file.with_name(file.name + '.tmp')
+            with urllib.request.urlopen(url, timeout=300) as response:
+                tmp_file.write_bytes(response.read())
+            tmp_file.replace(file)
+        files.append(file)
+    return files
+
+
+def iteration(large_networks: List[pp.network.Network], extra_cases: List[Path], dataframe_rounds: int) -> None:
     for case in CGMES_CASES:
         run_loadflows(load_cgmes_full(case))
     run_loadflows(load_cgmes_with_boundary())
@@ -105,6 +131,8 @@ def iteration(extra_cases: List[Path], dataframe_rounds: int) -> None:
     ieee300 = pp.network.create_ieee300()
     run_loadflows(ieee300)
     run_dataframes(ieee300, dataframe_rounds)
+    for network in large_networks:
+        run_dataframes(network, dataframe_rounds)
     for case in extra_cases:
         network = pp.network.load(case)
         run_loadflows(network)
@@ -119,9 +147,14 @@ def main() -> None:
                         help='Additional network files (CGMES zip or directory, or any supported format) to import and run '
                              'a load flow and the dataframe reads and updates on. The bundled '
                              'test cases are small, real-size grids give a more representative profile.')
-    parser.add_argument('--dataframe-rounds', type=int, default=10,
+    parser.add_argument('--dataframe-rounds', type=int, default=2,
                         help='Number of times the dataframe reads and updates are run per network and iteration '
-                             '(default: 10)')
+                             '(default: 2)')
+    parser.add_argument('--network-dir', type=Path, default=Path('pgo-networks'),
+                        help='Where the large networks (RTE 6515, PEGASE 9241 and 13659 buses) are downloaded and cached '
+                             '(default: pgo-networks in the current directory)')
+    parser.add_argument('--no-large-networks', action='store_true',
+                        help='Do not download nor use the large networks, e.g. for an offline build')
     args = parser.parse_args()
 
     if not os.environ.get('PYPOWSYBL_RUN_SHUTDOWN_HOOKS'):
@@ -129,9 +162,19 @@ def main() -> None:
               file=sys.stderr)
 
     print(f'pypowsybl {pp.__version__} loaded from {pp.__file__}')
+    large_networks = []
+    if not args.no_large_networks:
+        # Imported and load flows run once, iterations only repeat the dataframe paths on them: a single run already
+        # gives representative profiles on grids of this size, repeating them would only add build time.
+        for file in fetch_large_networks(args.network_dir):
+            start = time.perf_counter()
+            network = pp.network.load(file)
+            run_loadflows(network)
+            large_networks.append(network)
+            print(f'{file.name} imported and load flows run in {time.perf_counter() - start:.1f}s')
     for i in range(args.iterations):
         start = time.perf_counter()
-        iteration(args.cases, args.dataframe_rounds)
+        iteration(large_networks, args.cases, args.dataframe_rounds)
         print(f'iteration {i + 1}/{args.iterations} done in {time.perf_counter() - start:.1f}s')
 
 

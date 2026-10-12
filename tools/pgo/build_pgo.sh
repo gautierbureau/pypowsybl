@@ -62,7 +62,8 @@ if [ -z "${PGO_PROFILE:-}" ]; then
     # dedicated directory, which also ensures the installed (instrumented) package is imported, not the sources.
     WORKLOAD_DIR="$PGO_WORK_DIR/workload"
     rm -rf "$WORKLOAD_DIR" && mkdir -p "$WORKLOAD_DIR"
-    (cd "$WORKLOAD_DIR" && PYPOWSYBL_RUN_SHUTDOWN_HOOKS=1 "$PYTHON" "$REPO_DIR/tools/pgo/workload.py" "$@")
+    (cd "$WORKLOAD_DIR" && PYPOWSYBL_RUN_SHUTDOWN_HOOKS=1 "$PYTHON" "$REPO_DIR/tools/pgo/workload.py" \
+        --network-dir "$PGO_WORK_DIR/networks" "$@")
     if [ ! -s "$WORKLOAD_DIR/default.iprof" ]; then
         echo "The training workload did not produce $WORKLOAD_DIR/default.iprof" >&2
         exit 1
