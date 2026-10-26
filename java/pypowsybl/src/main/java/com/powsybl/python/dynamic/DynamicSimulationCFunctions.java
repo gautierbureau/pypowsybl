@@ -506,6 +506,22 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
+    // controls of the study's own, registered in the control catalog when the mapping resolves, so a
+    // machine whose extension names one is given a model built out of it
+    @CEntryPoint(name = "addMappingControlUnits")
+    public static void addMappingControlUnits(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                              DataframePointer controlUnitsDataframePtr, boolean override,
+                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                UpdatingDataframe controlUnitsDataframe = createDataframe(controlUnitsDataframePtr);
+                dynamicMapping.addControlUnits(ControlUnitsDataframeReader.read(controlUnitsDataframe), override);
+            }
+        });
+    }
+
     private static void addMappings(ObjectHandle dynamicMappingHandle, CCharPointer categoryNamePtr,
                                     DataframeArrayPointer mappingDataframePtr, PythonDynamicModelsSupplier.Mode mode) {
         String categoryName = CTypeUtil.toString(categoryNamePtr);

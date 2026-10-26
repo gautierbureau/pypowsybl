@@ -15,6 +15,10 @@ import com.powsybl.dynawo.mappings.DynamicModelsMapping;
 import com.powsybl.dynawo.mappings.MappedModelsSupplier;
 import com.powsybl.dynawo.mappings.MappingParameters;
 import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
+import com.powsybl.dynawo.mappings.preassembled.ControlUnitCatalog;
+import com.powsybl.dynawo.mappings.preassembled.ControlUnitProvider;
+import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit;
+import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit.MachineQuantity;
 import com.powsybl.dynawo.models.generators.SynchronousGeneratorBuilder;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.iidm.network.Network;
@@ -81,6 +85,37 @@ class PythonDynamicModelsSupplierTest {
         assertThat(CountingMappingProvider.CREATE_COUNT.get())
                 .as("the recipe is resolved once, not on every get")
                 .isEqualTo(1);
+    }
+
+    @Test
+    void shouldPutTheStudysControlsInTheCatalogForItsRecipesAlone() {
+        Network network = EurostagTutorialExample1Factory.create();
+        MachineControlUnit myGov = new MachineControlUnit("governor", "MyLibrary.MyGov", null)
+                .named("MyGov")
+                .reading("omegaPu", MachineQuantity.SPEED);
+        ControlUnitCatalog catalog = ControlUnitCatalog.getInstance();
+        try {
+            PythonDynamicModelsSupplier withControls = new PythonDynamicModelsSupplier();
+            withControls.addMappingRecipe(CountingMappingProvider.NAME, MappingParameters.empty());
+            withControls.addControlUnits(new ControlUnitProvider() {
+                @Override
+                public List<MachineControlUnit> getGovernors() {
+                    return List.of(myGov);
+                }
+            }, false);
+            assertThat(catalog.getGovernor("MyGov")).as("not before the recipes are applied").isEmpty();
+
+            withControls.get(network, ReportNode.NO_OP);
+            assertThat(catalog.getGovernor("MyGov")).containsSame(myGov);
+
+            // the next study in the same process starts from what ships, not from what this one added
+            PythonDynamicModelsSupplier without = new PythonDynamicModelsSupplier();
+            without.addMappingRecipe(CountingMappingProvider.NAME, MappingParameters.empty());
+            without.get(network, ReportNode.NO_OP);
+            assertThat(catalog.getGovernor("MyGov")).isEmpty();
+        } finally {
+            catalog.resetToBase();
+        }
     }
 
     /**

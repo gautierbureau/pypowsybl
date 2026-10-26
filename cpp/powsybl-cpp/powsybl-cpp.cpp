@@ -2032,6 +2032,10 @@ void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* addi
     PowsyblCaller::get()->callJava<>(::addMappingAdditionalModels, dynamicMappingHandle, additionalModelsDf);
 }
 
+void addMappingControlUnits(JavaHandle dynamicMappingHandle, dataframe* controlUnitsDf, bool override) {
+    PowsyblCaller::get()->callJava<>(::addMappingControlUnits, dynamicMappingHandle, controlUnitsDf, override);
+}
+
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType) {
     ToCharPtrPtr variablesPtr(variables);
     PowsyblCaller::get()->callJava<>(::addOutputVariables, outputVariablesHandle, (char*) dynamicId.c_str(), variablesPtr.get(), variables.size(), variableType);

@@ -12,6 +12,7 @@ from pypowsybl.network import Network
 from pypowsybl.report import ReportNode
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 from .model_config import ModelConfig, _to_c_dataframe  # pylint: disable=protected-access
+from .control_units import ControlUnit, _to_c_dataframe as _control_units_to_c_dataframe  # pylint: disable=protected-access
 
 
 def _to_parameter_value(value: Any) -> str:
@@ -86,6 +87,45 @@ class ModelMapping:
         if not model_configs:
             return
         _pp.add_mapping_additional_models(self._handle, _to_c_dataframe(model_configs))
+
+    def add_control_units(self, control_units: List[ControlUnit], override: bool = False) -> None:
+        """
+        Register machine controls of your own: governors, voltage regulators (with the exciter they
+        drive, if any) and the controls acting through a regulator, such as stabilisers.
+
+        They are put in the catalog the mappings added with :func:`create_mapping` design their
+        generator models from, when the mapping resolves (at :func:`get_models` as well as when a
+        simulation runs). A machine whose ``synchronousGeneratorProperties`` extension names one of
+        them by its ``name`` is then given a model built out of it, compiled by Dynawo if no model
+        already built holds it.
+
+        The controls hold for this mapping only: a mapping that registers none resolves against the
+        controls Dynawo ships.
+
+        A control whose Modelica model Dynawo does not ship is found in the directory named by the
+        ``modelicaModelsDir`` property of the ``dynawo-mappings`` configuration module. Each input
+        of such a model that the assembly leaves unconnected has to be declared in a ``.extvar``
+        file beside its ``.mo``, as in Dynawo's own library.
+
+        Args:
+            control_units: the controls to register
+            override: whether a control named like one the catalog already knows stands in for it.
+                By default the known one is kept and the new one left aside.
+
+        Examples:
+            .. code-block:: python
+
+                gov = (dyn.Governor('MyGov', model='MyLibrary.Governors.MyGov',
+                                    init_model='Dynawo.Electrical.Controls.Machines.Governors.Governor_INIT')
+                       .reading('PmPu', dyn.MachineQuantity.MECHANICAL_POWER)
+                       .reading('omegaPu', dyn.MachineQuantity.SPEED)
+                       .starting_from('Pm0Pu', dyn.MachineQuantity.INIT_MECHANICAL_POWER))
+                model_mapping.create_mapping('UniversalDynaWaltz')
+                model_mapping.add_control_units([gov])
+        """
+        if not control_units:
+            return
+        _pp.add_mapping_control_units(self._handle, _control_units_to_c_dataframe(control_units), override)
 
     @staticmethod
     def get_available_mappings() -> DataFrame:
