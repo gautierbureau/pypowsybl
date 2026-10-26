@@ -371,6 +371,14 @@ def test_add_control_units_on_mapping():
     model_mapping.add_control_units([])
 
 
+def test_set_modelica_models_dir(tmp_path):
+    model_mapping = dyn.ModelMapping()
+    model_mapping.set_modelica_models_dir(tmp_path)
+    model_mapping.set_modelica_models_dir(str(tmp_path))
+    with pytest.raises(ValueError):
+        model_mapping.set_modelica_models_dir(tmp_path / 'nothing here')
+
+
 def test_synchronous_generator_properties():
     n = pn.create_four_substations_node_breaker_network()
     extension_name = 'synchronousGeneratorProperties'

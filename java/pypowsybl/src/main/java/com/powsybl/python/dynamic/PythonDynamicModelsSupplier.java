@@ -88,6 +88,10 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
 
     private final List<ControlUnits> controlUnits = new ArrayList<>();
 
+    // where the Modelica sources of the study's own controls are kept, or null to keep the
+    // platform's, which a model built while the recipes resolve is compiled with
+    private Path modelicaModelsDir;
+
     /**
      * Whether the recipes have been turned into models yet. They are turned once: the models are
      * added as they resolve, so a second turn would stand up every one of them again and register
@@ -167,6 +171,14 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
     }
 
     /**
+     * Says where the Modelica sources of the controls this study describes are kept, in place of
+     * the directory the platform configuration names, for the models built while its recipes resolve.
+     */
+    public void setModelicaModelsDir(Path modelicaModelsDir) {
+        this.modelicaModelsDir = Objects.requireNonNull(modelicaModelsDir);
+    }
+
+    /**
      * Turns every recipe into models, once, against the network they are wanted for.
      * <p>
      * A recipe carries no network, so here is where its extensions are created, its models
@@ -203,13 +215,19 @@ public class PythonDynamicModelsSupplier implements DynamicModelsSupplier {
                 controlCatalog.register(c.units());
             }
         });
-        for (Recipe recipe : recipes) {
-            DynamicModelsMapping mapping = DynamicModelsMappings.getInstance()
-                    .create(recipe.name(), recipe.parameters());
-            DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
-                    .apply(mapping, network, recipeParameters, installed, reportNode);
-            registerBuiltModels(recipeParameters);
-            models.get(network, reportNode).forEach(model -> addModel((n, r) -> model, Mode.KEEP_FIRST));
+        // the models are built deep inside the mappings, where nothing the study holds is passed, so
+        // the study's own settings are put in force around applying them
+        MappingConfig studyConfig = modelicaModelsDir == null ? MappingConfig.load()
+                : MappingConfig.load().withModelicaModelsDir(modelicaModelsDir);
+        try (MappingConfig.Scope scope = studyConfig.useForStudy()) {
+            for (Recipe recipe : recipes) {
+                DynamicModelsMapping mapping = DynamicModelsMappings.getInstance()
+                        .create(recipe.name(), recipe.parameters());
+                DynamicModelsSupplier models = DynamicModelsMappings.getInstance()
+                        .apply(mapping, network, recipeParameters, installed, reportNode);
+                registerBuiltModels(recipeParameters);
+                models.get(network, reportNode).forEach(model -> addModel((n, r) -> model, Mode.KEEP_FIRST));
+            }
         }
         if (descriptions == null) {
             descriptions = installed;

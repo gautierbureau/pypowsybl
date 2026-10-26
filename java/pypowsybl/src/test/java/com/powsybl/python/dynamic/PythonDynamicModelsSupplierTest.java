@@ -12,6 +12,7 @@ import com.powsybl.dynamicsimulation.DynamicModel;
 import com.powsybl.dynawo.DynawoSimulationParameters;
 import com.powsybl.dynawo.mappings.DynamicMappingProvider;
 import com.powsybl.dynawo.mappings.DynamicModelsMapping;
+import com.powsybl.dynawo.mappings.MappingConfig;
 import com.powsybl.dynawo.mappings.MappedModelsSupplier;
 import com.powsybl.dynawo.mappings.MappingParameters;
 import com.powsybl.dynawo.mappings.parameters.ModelDescriptionLookup;
@@ -25,8 +26,11 @@ import com.powsybl.iidm.network.Network;
 import com.powsybl.iidm.network.test.EurostagTutorialExample1Factory;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -118,6 +122,21 @@ class PythonDynamicModelsSupplierTest {
         }
     }
 
+    @Test
+    void shouldResolveTheRecipesWithTheStudysModelicaSources() {
+        Network network = EurostagTutorialExample1Factory.create();
+        PythonDynamicModelsSupplier supplier = new PythonDynamicModelsSupplier();
+        supplier.addMappingRecipe(CountingMappingProvider.NAME, MappingParameters.empty());
+        supplier.setModelicaModelsDir(Path.of("/study/modelica"));
+
+        supplier.get(network, ReportNode.NO_OP);
+
+        assertThat(CountingMappingProvider.CONFIG_AT_CREATE.get().getModelicaModelsDir())
+                .hasValue(Path.of("/study/modelica"));
+        // and only while they resolve
+        assertThat(MappingConfig.load().getModelicaModelsDir()).isNotEqualTo(Optional.of(Path.of("/study/modelica")));
+    }
+
     /**
      * A supplier holding a description of the equipment valued by a set of the mapping's own,
      * which is what applying a mapping leaves behind.
@@ -157,6 +176,8 @@ class PythonDynamicModelsSupplierTest {
 
         static final String NAME = "TestMemoizedRecipe";
         static final AtomicInteger CREATE_COUNT = new AtomicInteger();
+        // the configuration in force when the recipe was resolved, which is where its models are built
+        static final AtomicReference<MappingConfig> CONFIG_AT_CREATE = new AtomicReference<>();
 
         @Override
         public String getName() {
@@ -171,6 +192,7 @@ class PythonDynamicModelsSupplierTest {
         @Override
         public DynamicModelsMapping create(MappingParameters parameters) {
             CREATE_COUNT.incrementAndGet();
+            CONFIG_AT_CREATE.set(MappingConfig.load());
             return new EmptyMapping();
         }
     }

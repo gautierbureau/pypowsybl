@@ -2036,6 +2036,10 @@ void addMappingControlUnits(JavaHandle dynamicMappingHandle, dataframe* controlU
     PowsyblCaller::get()->callJava<>(::addMappingControlUnits, dynamicMappingHandle, controlUnitsDf, override);
 }
 
+void setMappingModelicaModelsDir(JavaHandle dynamicMappingHandle, const std::string& modelicaModelsDir) {
+    PowsyblCaller::get()->callJava<>(::setMappingModelicaModelsDir, dynamicMappingHandle, (char*) modelicaModelsDir.c_str());
+}
+
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType) {
     ToCharPtrPtr variablesPtr(variables);
     PowsyblCaller::get()->callJava<>(::addOutputVariables, outputVariablesHandle, (char*) dynamicId.c_str(), variablesPtr.get(), variables.size(), variableType);

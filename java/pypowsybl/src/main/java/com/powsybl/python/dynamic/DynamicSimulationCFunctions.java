@@ -522,6 +522,20 @@ public final class DynamicSimulationCFunctions {
         });
     }
 
+    // where the Modelica sources of the study's own controls are kept, in place of the platform's
+    @CEntryPoint(name = "setMappingModelicaModelsDir")
+    public static void setMappingModelicaModelsDir(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                                   CCharPointer modelicaModelsDirPtr,
+                                                   ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                dynamicMapping.setModelicaModelsDir(Path.of(CTypeUtil.toString(modelicaModelsDirPtr)));
+            }
+        });
+    }
+
     private static void addMappings(ObjectHandle dynamicMappingHandle, CCharPointer categoryNamePtr,
                                     DataframeArrayPointer mappingDataframePtr, PythonDynamicModelsSupplier.Mode mode) {
         String categoryName = CTypeUtil.toString(categoryNamePtr);

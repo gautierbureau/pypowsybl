@@ -241,6 +241,7 @@ void dynamicSimulationBindings(py::module_& m) {
     //additional models
     m.def("add_mapping_additional_models", &pypowsybl::addMappingAdditionalModels, py::arg("dynamic_mapping_handle"), py::arg("additional_models_df"));
     m.def("add_mapping_control_units", &pypowsybl::addMappingControlUnits, py::arg("dynamic_mapping_handle"), py::arg("control_units_df"), py::arg("override"));
+    m.def("set_mapping_modelica_models_dir", &pypowsybl::setMappingModelicaModelsDir, py::arg("dynamic_mapping_handle"), py::arg("modelica_models_dir"));
 
     //model mapping
     m.def("add_all_dynamic_mappings", ::addDynamicMappingsBind, py::arg("dynamic_mapping_handle"), py::arg("category_name"), py::arg("dataframes"));

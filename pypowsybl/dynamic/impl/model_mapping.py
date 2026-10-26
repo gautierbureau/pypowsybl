@@ -4,6 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
+import os
+from pathlib import Path
 from typing import Any, List, Optional, Union
 from numpy.typing import ArrayLike
 from pandas import DataFrame
@@ -102,8 +104,9 @@ class ModelMapping:
         The controls hold for this mapping only: a mapping that registers none resolves against the
         controls Dynawo ships.
 
-        A control whose Modelica model Dynawo does not ship is found in the directory named by the
-        ``modelicaModelsDir`` property of the ``dynawo-mappings`` configuration module. Each input
+        A control whose Modelica model Dynawo does not ship is found in the directory given to
+        :func:`set_modelica_models_dir`, or else in the one named by the ``modelicaModelsDir``
+        property of the ``dynawo-mappings`` configuration module. Each input
         of such a model that the assembly leaves unconnected has to be declared in a ``.extvar``
         file beside its ``.mo``, as in Dynawo's own library.
 
@@ -126,6 +129,31 @@ class ModelMapping:
         if not control_units:
             return
         _pp.add_mapping_control_units(self._handle, _control_units_to_c_dataframe(control_units), override)
+
+    def set_modelica_models_dir(self, modelica_models_dir: Union[str, os.PathLike]) -> None:
+        """
+        Say where the Modelica sources of the controls registered with :func:`add_control_units`
+        are kept, for this mapping, in place of the ``modelicaModelsDir`` of the platform
+        configuration.
+
+        The directory is searched through, Dynawo's own library besides it, so several libraries can
+        be kept side by side under it: Dynawo takes a single such directory. A model built out of
+        those sources is rebuilt when they change.
+
+        Args:
+            modelica_models_dir: the directory holding the Modelica packages, for instance the one
+                holding ``MyLibrary/package.mo``
+
+        Examples:
+            .. code-block:: python
+
+                model_mapping.set_modelica_models_dir('/path/to/modelica')
+                model_mapping.add_control_units([gov])
+        """
+        path = Path(modelica_models_dir).expanduser().resolve()
+        if not path.is_dir():
+            raise ValueError(f'No Modelica models directory at {path}')
+        _pp.set_mapping_modelica_models_dir(self._handle, str(path))
 
     @staticmethod
     def get_available_mappings() -> DataFrame:
