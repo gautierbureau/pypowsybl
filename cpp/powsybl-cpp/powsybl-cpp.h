@@ -1080,6 +1080,10 @@ void addMappingControlUnits(JavaHandle dynamicMappingHandle, dataframe* controlU
 
 void setMappingModelicaModelsDir(JavaHandle dynamicMappingHandle, const std::string& modelicaModelsDir);
 
+SeriesArray* getControlUnits();
+
+SeriesArray* getMachineQuantities(const std::string& windings, bool transformer);
+
 // dynamic model mapping
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes);
 std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string categoryName);

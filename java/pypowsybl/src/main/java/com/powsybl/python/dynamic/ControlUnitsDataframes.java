@@ -8,23 +8,32 @@
 package com.powsybl.python.dynamic;
 
 import com.powsybl.commons.PowsyblException;
+import com.powsybl.dataframe.DataframeMapper;
+import com.powsybl.dataframe.DataframeMapperBuilder;
 import com.powsybl.dataframe.SeriesMetadata;
 import com.powsybl.dataframe.update.UpdatingDataframe;
+import com.powsybl.dynawo.extensions.api.generator.SynchronousGeneratorProperties.Windings;
+import com.powsybl.dynawo.mappings.preassembled.ControlUnitCatalog;
 import com.powsybl.dynawo.mappings.preassembled.ControlUnitProvider;
+import com.powsybl.dynawo.mappings.preassembled.GeneratorSynchronousUnit;
 import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit;
 import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit.MachineQuantity;
 import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit.RegulatorInput;
+import com.powsybl.dynawo.mappings.preassembled.ModelNaming;
 import com.powsybl.dynawo.mappings.preassembled.RegulatorControlUnit;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Reads the machine controls a study describes of its own, so they can be registered in the
- * control catalog and a model built out of them for the machines whose extension names them.
+ * The machine controls as dataframes, both ways: read from the ones a study describes of its own,
+ * so they can be registered in the control catalog and a model built out of them for the machines
+ * whose extension names them, and written from the catalog, so what ships can be looked at, and
+ * copied into a control of one's own.
  * <p>
  * The dataframe holds one row per connection a control makes, its definition repeated on each, so
  * a control is the rows sharing its name. A control making no connection at all is one row with
@@ -32,7 +41,7 @@ import java.util.Objects;
  *
  * @author Gautier Bureau {@literal <gautier.bureau at rte-france.com>}
  */
-public final class ControlUnitsDataframeReader {
+public final class ControlUnitsDataframes {
 
     private static final String NAME = "name";
     private static final String KIND = "kind";
@@ -57,13 +66,32 @@ public final class ControlUnitsDataframeReader {
 
     /**
      * What part a control plays. An exciter is not a control of its own in the catalog: it comes with
-     * the voltage regulator {@linkplain TargetKind#EXCITER driving} it.
+     * the voltage regulator {@linkplain TargetKind#EXCITER driving} it. The others act through the
+     * voltage regulator, each the {@link RegulatorControlUnit.Kind} of the same name.
      */
     enum Kind {
         GOVERNOR,
         VOLTAGE_REGULATOR,
         EXCITER,
-        REGULATOR_CONTROL
+        PSS(RegulatorControlUnit.Kind.PSS),
+        OVER_EXCITATION_LIMITER(RegulatorControlUnit.Kind.OVER_EXCITATION_LIMITER),
+        UNDER_EXCITATION_LIMITER(RegulatorControlUnit.Kind.UNDER_EXCITATION_LIMITER),
+        STATOR_CURRENT_LIMITER(RegulatorControlUnit.Kind.STATOR_CURRENT_LIMITER),
+        REACTIVE_POWER_CONTROL_LOOP(RegulatorControlUnit.Kind.REACTIVE_POWER_CONTROL_LOOP);
+
+        private final RegulatorControlUnit.Kind regulatorControlKind;
+
+        Kind() {
+            this(null);
+        }
+
+        Kind(RegulatorControlUnit.Kind regulatorControlKind) {
+            this.regulatorControlKind = regulatorControlKind;
+        }
+
+        static Kind of(RegulatorControlUnit.Kind regulatorControlKind) {
+            return valueOf(regulatorControlKind.name());
+        }
     }
 
     /**
@@ -111,7 +139,7 @@ public final class ControlUnitsDataframeReader {
         }
     }
 
-    private ControlUnitsDataframeReader() {
+    private ControlUnitsDataframes() {
     }
 
     public static List<SeriesMetadata> getMetadata() {
@@ -158,10 +186,10 @@ public final class ControlUnitsDataframeReader {
             switch (definition.kind()) {
                 case GOVERNOR -> governors.add(machineControl(name, definition, rows.get(name), exciters));
                 case VOLTAGE_REGULATOR -> voltageRegulators.add(machineControl(name, definition, rows.get(name), exciters));
-                case REGULATOR_CONTROL -> regulatorControls.add(regulatorControl(name, definition, rows.get(name)));
                 case EXCITER -> {
                     // brought in by the regulator driving it
                 }
+                default -> regulatorControls.add(regulatorControl(name, definition, rows.get(name)));
             }
         });
         return new RegisteredControls(List.copyOf(governors), List.copyOf(voltageRegulators), List.copyOf(regulatorControls));
@@ -211,8 +239,122 @@ public final class ControlUnitsDataframeReader {
         return unit;
     }
 
+    /**
+     * One row of the dataframe written from the catalog.
+     */
+    record ControlUnitRow(String name, String kind, String model, String initModel, String instanceId,
+                          String ownVar, String targetKind, String target, boolean init) {
+    }
+
+    /**
+     * The controls a catalog holds, one row per connection, in the columns {@link #read} takes, so
+     * a control written out can be read back once changed. A control whose kind is not known, one
+     * a provider declared without it, is written with none, and has to be given one to be read back.
+     */
+    public static List<ControlUnitRow> rows(ControlUnitCatalog catalog) {
+        List<ControlUnitRow> rows = new ArrayList<>();
+        Map<String, MachineControlUnit> exciters = new LinkedHashMap<>();
+        catalog.getGovernors().forEach((name, unit) -> machineControlRows(rows, name, Kind.GOVERNOR, unit));
+        catalog.getVoltageRegulators().forEach((name, unit) -> {
+            machineControlRows(rows, name, Kind.VOLTAGE_REGULATOR, unit);
+            if (unit.getExciter() != null) {
+                exciters.putIfAbsent(unit.getExciter().getCatalogName(), unit.getExciter());
+            }
+        });
+        // each exciter once, however many regulators drive it
+        exciters.forEach((name, unit) -> machineControlRows(rows, name, Kind.EXCITER, unit));
+        catalog.getRegulatorControls().forEach((name, unit) -> {
+            String kind = unit.getKind().map(k -> Kind.of(k).name()).orElse("");
+            List<ControlUnitRow> own = new ArrayList<>();
+            unit.getWatches().forEach(w -> own.add(row(name, kind, unit.getName(), unit.getInitName(), unit.getId(),
+                    w.ownVar(), TargetKind.MACHINE, w.quantity().name(), w.initialisation())));
+            unit.getDrives().forEach(d -> own.add(row(name, kind, unit.getName(), unit.getInitName(), unit.getId(),
+                    d.ownVar(), TargetKind.REGULATOR_INPUT, d.input().name(), d.initialisation())));
+            addOrNone(rows, own, name, kind, unit.getName(), unit.getInitName(), unit.getId());
+        });
+        return rows;
+    }
+
+    private static void machineControlRows(List<ControlUnitRow> rows, String name, Kind kind, MachineControlUnit unit) {
+        String k = kind.name();
+        List<ControlUnitRow> own = new ArrayList<>();
+        unit.getWires().forEach(w -> own.add(row(name, k, unit.getName(), unit.getInitName(), unit.getId(),
+                w.ownVar(), TargetKind.MACHINE, w.quantity().name(), w.initialisation())));
+        unit.getInputs().forEach((input, var) -> own.add(row(name, k, unit.getName(), unit.getInitName(), unit.getId(),
+                var, TargetKind.REGULATOR_INPUT, input.name(), false)));
+        unit.getGovernorLinks().forEach(l -> own.add(row(name, k, unit.getName(), unit.getInitName(), unit.getId(),
+                l.var(), TargetKind.GOVERNOR_LINK, "", l.initialisation())));
+        unit.getRegulatorLinks().forEach(l -> own.add(row(name, k, unit.getName(), unit.getInitName(), unit.getId(),
+                l.var(), TargetKind.REGULATOR_LINK, "", l.initialisation())));
+        if (unit.getExciter() != null) {
+            own.add(row(name, k, unit.getName(), unit.getInitName(), unit.getId(),
+                    "", TargetKind.EXCITER, unit.getExciter().getCatalogName(), false));
+        }
+        addOrNone(rows, own, name, k, unit.getName(), unit.getInitName(), unit.getId());
+    }
+
+    private static void addOrNone(List<ControlUnitRow> rows, List<ControlUnitRow> own, String name, String kind,
+                                  String model, String initModel, String instanceId) {
+        if (own.isEmpty()) {
+            rows.add(new ControlUnitRow(name, kind, model, nullToEmpty(initModel), instanceId, "", "", "", false));
+        } else {
+            rows.addAll(own);
+        }
+    }
+
+    private static ControlUnitRow row(String name, String kind, String model, String initModel, String instanceId,
+                                      String ownVar, TargetKind targetKind, String target, boolean init) {
+        return new ControlUnitRow(name, kind, model, nullToEmpty(initModel), instanceId, ownVar, targetKind.name(), target, init);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    public static DataframeMapper<Collection<ControlUnitRow>, Void> controlUnitsMapper() {
+        return new DataframeMapperBuilder<Collection<ControlUnitRow>, ControlUnitRow, Void>()
+                .itemsStreamProvider(Collection::stream)
+                .stringsIndex(NAME, ControlUnitRow::name)
+                .strings(KIND, ControlUnitRow::kind)
+                .strings(MODEL, ControlUnitRow::model)
+                .strings(INIT_MODEL, ControlUnitRow::initModel)
+                .strings(INSTANCE_ID, ControlUnitRow::instanceId)
+                .strings(OWN_VAR, ControlUnitRow::ownVar)
+                .strings(TARGET_KIND, ControlUnitRow::targetKind)
+                .strings(TARGET, ControlUnitRow::target)
+                .booleans(INIT, ControlUnitRow::init)
+                .build();
+    }
+
+    /**
+     * One quantity a machine offers, with the variable holding it.
+     */
+    record MachineQuantityRow(String quantity, boolean init, String variable) {
+    }
+
+    /**
+     * The quantities a synchronous machine of that shape offers, named as the mappings build their
+     * models: what a control can read or drive while running, and start from at initialisation.
+     */
+    public static List<MachineQuantityRow> machineQuantities(Windings windings, boolean transformer) {
+        return MachineQuantity.offeredBy(new GeneratorSynchronousUnit(windings, transformer, ModelNaming.DYNAWO_1_7_0))
+                .entrySet().stream()
+                .map(e -> new MachineQuantityRow(e.getKey().name(), e.getKey().isInitialisation(), e.getValue()))
+                .toList();
+    }
+
+    public static DataframeMapper<Collection<MachineQuantityRow>, Void> machineQuantitiesMapper() {
+        return new DataframeMapperBuilder<Collection<MachineQuantityRow>, MachineQuantityRow, Void>()
+                .itemsStreamProvider(Collection::stream)
+                .stringsIndex("quantity", MachineQuantityRow::quantity)
+                .booleans(INIT, MachineQuantityRow::init)
+                .strings("variable", MachineQuantityRow::variable)
+                .build();
+    }
+
     private static RegulatorControlUnit regulatorControl(String name, Definition definition, List<Row> rows) {
-        RegulatorControlUnit unit = new RegulatorControlUnit(definition.instanceId(), definition.model(), definition.initModel())
+        RegulatorControlUnit unit = new RegulatorControlUnit(definition.kind().regulatorControlKind,
+                definition.instanceId(), definition.model(), definition.initModel())
                 .named(name);
         for (Row row : rows) {
             switch (row.targetKind()) {

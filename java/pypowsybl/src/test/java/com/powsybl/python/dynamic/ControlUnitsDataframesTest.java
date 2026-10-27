@@ -19,9 +19,14 @@ import com.powsybl.dynawo.mappings.preassembled.GeneratorModelDesigner;
 import com.powsybl.dynawo.mappings.preassembled.MachineControlUnit;
 import com.powsybl.dynawo.mappings.preassembled.ModelNaming;
 import com.powsybl.dynawo.mappings.preassembled.PreassembledModel;
+import com.powsybl.dynawo.mappings.preassembled.RegulatorControlUnit;
+import com.powsybl.python.dynamic.ControlUnitsDataframes.ControlUnitRow;
+import com.powsybl.python.dynamic.ControlUnitsDataframes.MachineQuantityRow;
 import com.powsybl.dynawo.mappings.preassembled.UnitConnection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * @author Gautier Bureau {@literal <gautier.bureau at rte-france.com>}
  */
-class ControlUnitsDataframeReaderTest {
+class ControlUnitsDataframesTest {
 
     private static final String GOVERNORS = "Dynawo.Electrical.Controls.Machines.Governors.";
     private static final String REGULATORS = "Dynawo.Electrical.Controls.Machines.VoltageRegulators.";
@@ -88,15 +93,15 @@ class ControlUnitsDataframeReaderTest {
                 row("MyVr", "VOLTAGE_REGULATOR", vr, vrInit, "voltageRegulator", "Ir0Pu", "MACHINE", "INIT_ROTOR_CURRENT", true),
                 row("MyVr", "VOLTAGE_REGULATOR", vr, vrInit, "voltageRegulator", "Us0Pu", "MACHINE", "INIT_STATOR_VOLTAGE", true),
                 row("MyVr", "VOLTAGE_REGULATOR", vr, vrInit, "voltageRegulator", "UPssPu", "REGULATOR_INPUT", "STABILISER", false),
-                row("MyPss", "REGULATOR_CONTROL", pss, pssInit, "powerSystemStabilizer", "PGenPu", "MACHINE", "ACTIVE_POWER", false),
-                row("MyPss", "REGULATOR_CONTROL", pss, pssInit, "powerSystemStabilizer", "omegaPu", "MACHINE", "SPEED", false),
-                row("MyPss", "REGULATOR_CONTROL", pss, pssInit, "powerSystemStabilizer", "PGen0Pu", "MACHINE", "INIT_ACTIVE_POWER", true),
-                row("MyPss", "REGULATOR_CONTROL", pss, pssInit, "powerSystemStabilizer", "VPssPu", "REGULATOR_INPUT", "STABILISER", false));
+                row("MyPss", "PSS", pss, pssInit, "powerSystemStabilizer", "PGenPu", "MACHINE", "ACTIVE_POWER", false),
+                row("MyPss", "PSS", pss, pssInit, "powerSystemStabilizer", "omegaPu", "MACHINE", "SPEED", false),
+                row("MyPss", "PSS", pss, pssInit, "powerSystemStabilizer", "PGen0Pu", "MACHINE", "INIT_ACTIVE_POWER", true),
+                row("MyPss", "PSS", pss, pssInit, "powerSystemStabilizer", "VPssPu", "REGULATOR_INPUT", "STABILISER", false));
     }
 
     @Test
     void shouldReadControlsTheCatalogDesignsAModelWith() {
-        ControlUnitProvider units = ControlUnitsDataframeReader.read(governorRegulatorAndStabiliser());
+        ControlUnitProvider units = ControlUnitsDataframes.read(governorRegulatorAndStabiliser());
         assertThat(units.getGovernors()).hasSize(1);
         assertThat(units.getVoltageRegulators()).hasSize(1);
         assertThat(units.getRegulatorControls()).hasSize(1);
@@ -120,7 +125,7 @@ class ControlUnitsDataframeReaderTest {
     void shouldGiveARegulatorTheExciterItDrives() {
         String exciter = "MyLibrary.Exciters.MyExciter";
         String vr = "MyLibrary.Regulators.MyRegulator";
-        ControlUnitProvider units = ControlUnitsDataframeReader.read(dataframe(
+        ControlUnitProvider units = ControlUnitsDataframes.read(dataframe(
                 // the regulator before the exciter it drives
                 row("MyRegulator", "VOLTAGE_REGULATOR", vr, "", "voltageRegulator", "UsPu", "MACHINE", "STATOR_VOLTAGE", false),
                 row("MyRegulator", "VOLTAGE_REGULATOR", vr, "", "voltageRegulator", "", "EXCITER", "MyExciter", false),
@@ -138,7 +143,7 @@ class ControlUnitsDataframeReaderTest {
 
     @Test
     void shouldReadAControlMakingNoConnection() {
-        ControlUnitProvider units = ControlUnitsDataframeReader.read(dataframe(
+        ControlUnitProvider units = ControlUnitsDataframes.read(dataframe(
                 row("Fixed", "GOVERNOR", "MyLibrary.Fixed", "", "governor", "", "", "", false)));
 
         assertThat(units.getGovernors()).singleElement()
@@ -150,7 +155,7 @@ class ControlUnitsDataframeReaderTest {
         UpdatingDataframe dataframe = dataframe(
                 row("MyGov", "GOVERNOR", "M", "", "governor", "omegaPu", "MACHINE", "SPEEDD", false));
 
-        assertThatThrownBy(() -> ControlUnitsDataframeReader.read(dataframe))
+        assertThatThrownBy(() -> ControlUnitsDataframes.read(dataframe))
                 .isInstanceOf(PowsyblException.class)
                 .hasMessageContaining("SPEEDD")
                 .hasMessageContaining("MyGov");
@@ -161,7 +166,7 @@ class ControlUnitsDataframeReaderTest {
         UpdatingDataframe dataframe = dataframe(
                 row("MyGov", "GOVERNOR", "M", "", "governor", "UPssPu", "REGULATOR_INPUT", "STABILISER", false));
 
-        assertThatThrownBy(() -> ControlUnitsDataframeReader.read(dataframe))
+        assertThatThrownBy(() -> ControlUnitsDataframes.read(dataframe))
                 .isInstanceOf(PowsyblException.class)
                 .hasMessageContaining("REGULATOR_INPUT is not one a GOVERNOR makes");
     }
@@ -172,7 +177,7 @@ class ControlUnitsDataframeReaderTest {
                 row("MyGov", "GOVERNOR", "A", "", "governor", "omegaPu", "MACHINE", "SPEED", false),
                 row("MyGov", "GOVERNOR", "B", "", "governor", "PmPu", "MACHINE", "MECHANICAL_POWER", false));
 
-        assertThatThrownBy(() -> ControlUnitsDataframeReader.read(dataframe))
+        assertThatThrownBy(() -> ControlUnitsDataframes.read(dataframe))
                 .isInstanceOf(PowsyblException.class)
                 .hasMessageContaining("described twice");
     }
@@ -182,8 +187,79 @@ class ControlUnitsDataframeReaderTest {
         UpdatingDataframe dataframe = dataframe(
                 row("MyRegulator", "VOLTAGE_REGULATOR", "M", "", "voltageRegulator", "", "EXCITER", "Nowhere", false));
 
-        assertThatThrownBy(() -> ControlUnitsDataframeReader.read(dataframe))
+        assertThatThrownBy(() -> ControlUnitsDataframes.read(dataframe))
                 .isInstanceOf(PowsyblException.class)
                 .hasMessageContaining("Nowhere");
+    }
+
+    @Test
+    void shouldGiveARegulatorControlTheKindItIsDeclared() {
+        ControlUnitProvider units = ControlUnitsDataframes.read(dataframe(
+                row("MyUel", "UNDER_EXCITATION_LIMITER", "M", "", "underExcitationLimiter", "UUelPu", "REGULATOR_INPUT", "UNDER_EXCITATION", false)));
+
+        assertThat(units.getRegulatorControls()).singleElement()
+                .satisfies(c -> assertThat(c.getKind()).hasValue(RegulatorControlUnit.Kind.UNDER_EXCITATION_LIMITER));
+        assertThatThrownBy(() -> ControlUnitsDataframes.read(dataframe(
+                row("MyPss", "REGULATOR_CONTROL", "M", "", "pss", "VPssPu", "REGULATOR_INPUT", "STABILISER", false))))
+                .isInstanceOf(PowsyblException.class)
+                .hasMessageContaining("REGULATOR_CONTROL");
+    }
+
+    @Test
+    void shouldWriteWhatShipsInTheColumnsItReads() {
+        List<ControlUnitRow> rows = ControlUnitsDataframes.rows(ControlUnitCatalog.shipped());
+
+        assertThat(rows).filteredOn(r -> r.name().equals("GovCt2")).containsExactly(
+                new ControlUnitRow("GovCt2", "GOVERNOR", GOVERNORS + "Standard.Generic.GovCt2", GOVERNORS + "GovernorPmPGen_INIT",
+                        "governor", "PGenPu", "MACHINE", "ACTIVE_POWER", false),
+                new ControlUnitRow("GovCt2", "GOVERNOR", GOVERNORS + "Standard.Generic.GovCt2", GOVERNORS + "GovernorPmPGen_INIT",
+                        "governor", "PmPu", "MACHINE", "MECHANICAL_POWER", false),
+                new ControlUnitRow("GovCt2", "GOVERNOR", GOVERNORS + "Standard.Generic.GovCt2", GOVERNORS + "GovernorPmPGen_INIT",
+                        "governor", "omegaPu", "MACHINE", "SPEED", false),
+                new ControlUnitRow("GovCt2", "GOVERNOR", GOVERNORS + "Standard.Generic.GovCt2", GOVERNORS + "GovernorPmPGen_INIT",
+                        "governor", "PGen0Pu", "MACHINE", "INIT_ACTIVE_POWER", true),
+                new ControlUnitRow("GovCt2", "GOVERNOR", GOVERNORS + "Standard.Generic.GovCt2", GOVERNORS + "GovernorPmPGen_INIT",
+                        "governor", "Pm0Pu", "MACHINE", "INIT_MECHANICAL_POWER", true));
+        assertThat(rows).filteredOn(r -> r.name().equals("Pss2a")).extracting(ControlUnitRow::kind).containsOnly("PSS");
+        assertThat(rows).filteredOn(r -> r.name().equals("St4b"))
+                .contains(new ControlUnitRow("St4b", "VOLTAGE_REGULATOR", REGULATORS + "Standard.St4b",
+                        REGULATORS + "Standard.St4b_INIT", "voltageRegulator", "UPssPu", "REGULATOR_INPUT", "STABILISER", false));
+    }
+
+    @Test
+    void shouldReadBackWhatItWrote() {
+        ControlUnitCatalog shipped = ControlUnitCatalog.shipped();
+        List<ControlUnitRow> written = ControlUnitsDataframes.rows(shipped).stream()
+                .filter(r -> List.of("GovCt2", "St4b", "Pss2a").contains(r.name()))
+                .toList();
+
+        ControlUnitProvider read = ControlUnitsDataframes.read(dataframe(written.stream()
+                .map(r -> new String[] {r.name(), r.kind(), r.model(), r.initModel(), r.instanceId(),
+                    r.ownVar(), r.targetKind(), r.target(), Boolean.toString(r.init())})
+                .toArray(String[][]::new)));
+
+        assertThat(read.getGovernors()).singleElement()
+                .satisfies(g -> assertThat(g.getWires()).isEqualTo(shipped.getGovernors().get("GovCt2").getWires()));
+        assertThat(read.getVoltageRegulators()).singleElement()
+                .satisfies(v -> {
+                    assertThat(v.getWires()).isEqualTo(shipped.getVoltageRegulators().get("St4b").getWires());
+                    assertThat(v.getInputs()).isEqualTo(shipped.getVoltageRegulators().get("St4b").getInputs());
+                });
+        assertThat(read.getRegulatorControls()).singleElement()
+                .satisfies(p -> {
+                    assertThat(p.getKind()).hasValue(RegulatorControlUnit.Kind.PSS);
+                    assertThat(p.getWatches()).isEqualTo(shipped.getRegulatorControls().get("Pss2a").getWatches());
+                    assertThat(p.getDrives()).isEqualTo(shipped.getRegulatorControls().get("Pss2a").getDrives());
+                });
+    }
+
+    @Test
+    void shouldListWhatAMachineOffers() {
+        List<MachineQuantityRow> quantities = ControlUnitsDataframes.machineQuantities(Windings.FOUR_WINDINGS, false);
+
+        assertThat(quantities).contains(
+                new MachineQuantityRow("SPEED", false, "omegaPu.value"),
+                new MachineQuantityRow("INIT_MECHANICAL_POWER", true, "Pm0Pu"));
+        assertThat(quantities).extracting(MachineQuantityRow::quantity).doesNotContain("RUNNING");
     }
 }

@@ -22,7 +22,7 @@ from typing import List, Optional, Tuple, Union
 
 import pandas as pd
 from pypowsybl import _pypowsybl
-from pypowsybl.utils import _create_c_dataframe  # pylint: disable=protected-access
+from pypowsybl.utils import _create_c_dataframe, create_data_frame_from_series_array  # pylint: disable=protected-access
 
 # String series type expected by the native dataframe layer.
 _STRING_SERIES_TYPE = 0
@@ -234,26 +234,18 @@ class VoltageRegulator(_ControlUnit):
 
 class RegulatorControl(_ControlUnit):
     """
-    A control acting on the machine through its voltage regulator: a stabiliser, an over or under
-    excitation limiter, a stator current limiter, a reactive power control loop. It is named in a
-    ``synchronousGeneratorProperties`` extension by its ``name`` (a stabiliser as its ``pss``).
-
-    Its ``instance_id`` has no default: Dynawo's own assemblies call a stabiliser
-    ``powerSystemStabilizer`` or ``pss``, a limiter ``overExcitationLimiter``...
-
-    Examples:
-        .. code-block:: python
-
-            pss = (dyn.RegulatorControl('MyPss',
-                                        model='Dynawo.Electrical.Controls.Machines.PowerSystemStabilizers.Standard.Pss2a',
-                                        init_model='Dynawo.Electrical.Controls.Machines.PowerSystemStabilizers.Pss_INIT',
-                                        instance_id='powerSystemStabilizer')
-                   .reading('PGenPu', dyn.MachineQuantity.ACTIVE_POWER)
-                   .reading('omegaPu', dyn.MachineQuantity.SPEED)
-                   .starting_from('PGen0Pu', dyn.MachineQuantity.INIT_ACTIVE_POWER)
-                   .driving('VPssPu', dyn.RegulatorInput.STABILISER))
+    What the controls acting on the machine through its voltage regulator have in common: each
+    reads the machine and drives an input of the regulator, which names it. Use the class of the
+    part it plays: :class:`Pss`, :class:`OverExcitationLimiter`, :class:`UnderExcitationLimiter`,
+    :class:`StatorCurrentLimiter` or :class:`ReactivePowerControlLoop`.
     """
-    _KIND = 'REGULATOR_CONTROL'
+
+    def __init__(self, name: str, model: str, init_model: Optional[str] = None,
+                 instance_id: Optional[str] = None):
+        if type(self) is RegulatorControl:  # pylint: disable=unidiomatic-typecheck
+            raise TypeError('RegulatorControl says nothing of the part a control plays: use Pss, '
+                            'OverExcitationLimiter, UnderExcitationLimiter, StatorCurrentLimiter or ReactivePowerControlLoop')
+        super().__init__(name, model, init_model, instance_id)
 
     def driving(self, own_var: str, regulator_input: RegulatorInput) -> 'RegulatorControl':
         """Wires one of its variables to an input of the regulator while the simulation runs."""
@@ -273,6 +265,52 @@ class RegulatorControl(_ControlUnit):
         return self
 
 
+class Pss(RegulatorControl):
+    """
+    A power system stabiliser, named in a ``synchronousGeneratorProperties`` extension as its ``pss``.
+
+    Dynawo's own assemblies call it ``powerSystemStabilizer`` inside a model, some older ones
+    ``pss``: give ``instance_id='pss'`` to build one the older way.
+
+    Examples:
+        .. code-block:: python
+
+            pss = (dyn.Pss('MyPss',
+                           model='Dynawo.Electrical.Controls.Machines.PowerSystemStabilizers.Standard.Pss2a',
+                           init_model='Dynawo.Electrical.Controls.Machines.PowerSystemStabilizers.Pss_INIT')
+                   .reading('PGenPu', dyn.MachineQuantity.ACTIVE_POWER)
+                   .reading('omegaPu', dyn.MachineQuantity.SPEED)
+                   .starting_from('PGen0Pu', dyn.MachineQuantity.INIT_ACTIVE_POWER)
+                   .driving('VPssPu', dyn.RegulatorInput.STABILISER))
+    """
+    _KIND = 'PSS'
+    _DEFAULT_INSTANCE_ID = 'powerSystemStabilizer'
+
+
+class OverExcitationLimiter(RegulatorControl):
+    """An over excitation limiter, holding the field current of the machine within what it can stand."""
+    _KIND = 'OVER_EXCITATION_LIMITER'
+    _DEFAULT_INSTANCE_ID = 'overExcitationLimiter'
+
+
+class UnderExcitationLimiter(RegulatorControl):
+    """An under excitation limiter, keeping the machine from absorbing more reactive power than it can stand."""
+    _KIND = 'UNDER_EXCITATION_LIMITER'
+    _DEFAULT_INSTANCE_ID = 'underExcitationLimiter'
+
+
+class StatorCurrentLimiter(RegulatorControl):
+    """A stator current limiter, holding the stator current of the machine within what it can stand."""
+    _KIND = 'STATOR_CURRENT_LIMITER'
+    _DEFAULT_INSTANCE_ID = 'statorCurrentLimiter'
+
+
+class ReactivePowerControlLoop(RegulatorControl):
+    """A reactive power control loop, adjusting the regulator's voltage reference to a reactive power set point."""
+    _KIND = 'REACTIVE_POWER_CONTROL_LOOP'
+    _DEFAULT_INSTANCE_ID = 'reactivePowerControlLoop'
+
+
 ControlUnit = Union[Governor, VoltageRegulator, Exciter, RegulatorControl]
 
 
@@ -285,11 +323,14 @@ def _with_exciters(units: List[ControlUnit]) -> List[ControlUnit]:
     return list(units) + unique
 
 
-def _to_dataframe(units: List[ControlUnit]) -> pd.DataFrame:
+def _to_dataframe(units: Union[List[ControlUnit], pd.DataFrame]) -> pd.DataFrame:
     """
     One row per connection, a control's definition repeated on each, ``name`` as index: what
-    ``_pypowsybl.add_mapping_control_units`` reads.
+    ``_pypowsybl.add_mapping_control_units`` reads. A dataframe in those columns, as
+    :func:`get_control_units` returns, is taken as it is.
     """
+    if isinstance(units, pd.DataFrame):
+        return _from_dataframe(units)
     seen: dict = {}
     for unit in _with_exciters(units):
         if unit.name in seen and seen[unit.name] is not unit:
@@ -299,5 +340,76 @@ def _to_dataframe(units: List[ControlUnit]) -> pd.DataFrame:
     return pd.DataFrame(records, columns=_CONTROL_UNITS_COLUMNS).set_index('name')
 
 
-def _to_c_dataframe(units: List[ControlUnit]) -> _pypowsybl.Dataframe:
+def _to_c_dataframe(units: Union[List[ControlUnit], pd.DataFrame]) -> _pypowsybl.Dataframe:
     return _create_c_dataframe(_to_dataframe(units), _CONTROL_UNITS_METADATA)
+
+
+def _from_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """The dataframe in the columns the native layer reads, every value a string."""
+    df = df.reset_index() if 'name' not in df.columns else df
+    missing = [c for c in _CONTROL_UNITS_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f'The control units dataframe is missing the columns {missing}')
+    df = df[_CONTROL_UNITS_COLUMNS].copy()
+    df['init'] = df['init'].map(lambda v: 'true' if str(v).lower() == 'true' else 'false')
+    return df.fillna('').astype(str).set_index('name')
+
+
+def get_control_units(names: Optional[List[str]] = None) -> pd.DataFrame:
+    """
+    The machine controls that ship, Dynawo's own and those a deployment's providers bring: what
+    each reads off the machine and drives on its regulator, while running and at initialisation.
+
+    One row per connection, in the columns :func:`ModelMapping.add_control_units` takes, so a control
+    that ships can be copied, changed, renamed and registered as one of one's own.
+
+    Columns:
+        - **name** (index): the name a ``synchronousGeneratorProperties`` extension and a model give it
+        - **kind**: ``GOVERNOR``, ``VOLTAGE_REGULATOR``, ``EXCITER``, ``PSS``, ``OVER_EXCITATION_LIMITER``,
+          ``UNDER_EXCITATION_LIMITER``, ``STATOR_CURRENT_LIMITER`` or ``REACTIVE_POWER_CONTROL_LOOP``
+        - **model**, **init_model**: the Modelica models it stands for and computes its initial state with
+        - **instance_id**: its id inside a model, which prefixes its parameters
+        - **own_var**: its variable the connection wires
+        - **target_kind**: ``MACHINE`` (a :class:`MachineQuantity`), ``REGULATOR_INPUT`` (a :class:`RegulatorInput`,
+          the one a regulator names or the one a control acting through it drives), ``GOVERNOR_LINK``,
+          ``REGULATOR_LINK``, or ``EXCITER`` (the exciter a regulator drives)
+        - **target**: what it is wired to
+        - **init**: whether the connection is made while the initial state is computed
+
+    Args:
+        names: the controls to keep, all of them if not given
+
+    Examples:
+        .. code-block:: python
+
+            dyn.get_control_units(['GovCt2', 'St4b', 'Pss2a'])
+    """
+    df = create_data_frame_from_series_array(_pypowsybl.get_control_units())
+    if names is not None:
+        df = df[df.index.isin(names)]
+    return df
+
+
+def get_machine_quantities(windings: str = 'FOUR_WINDINGS', transformer: bool = False) -> pd.DataFrame:
+    """
+    What a synchronous machine offers the controls put on it, as the mappings build their models:
+    the quantities a control reads or drives while running, and those it starts from at
+    initialisation, each with the variable of the machine holding it. A quantity the machine has
+    nothing to say about is left out.
+
+    Columns:
+        - **quantity** (index): a :class:`MachineQuantity`
+        - **init**: whether it is a value the machine starts from, read at initialisation
+        - **variable**: the machine's variable holding it
+
+    Args:
+        windings: ``FOUR_WINDINGS`` or ``THREE_WINDINGS``
+        transformer: whether the machine stands behind a transformer of its own
+
+    Examples:
+        .. code-block:: python
+
+            quantities = dyn.get_machine_quantities('FOUR_WINDINGS')
+            at_init = quantities[quantities.init]
+    """
+    return create_data_frame_from_series_array(_pypowsybl.get_machine_quantities(windings, transformer))

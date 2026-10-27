@@ -90,7 +90,7 @@ class ModelMapping:
             return
         _pp.add_mapping_additional_models(self._handle, _to_c_dataframe(model_configs))
 
-    def add_control_units(self, control_units: List[ControlUnit], override: bool = False) -> None:
+    def add_control_units(self, control_units: Union[List[ControlUnit], DataFrame], override: bool = False) -> None:
         """
         Register machine controls of your own: governors, voltage regulators (with the exciter they
         drive, if any) and the controls acting through a regulator, such as stabilisers.
@@ -111,7 +111,9 @@ class ModelMapping:
         file beside its ``.mo``, as in Dynawo's own library.
 
         Args:
-            control_units: the controls to register
+            control_units: the controls to register, as :class:`Governor`, :class:`VoltageRegulator`,
+                :class:`Pss`... or as a dataframe in the columns :func:`get_control_units` returns, so
+                a control that ships can be copied and changed into one of one's own
             override: whether a control named like one the catalog already knows stands in for it.
                 By default the known one is kept and the new one left aside.
 
@@ -126,7 +128,9 @@ class ModelMapping:
                 model_mapping.create_mapping('UniversalDynaWaltz')
                 model_mapping.add_control_units([gov])
         """
-        if not control_units:
+        if isinstance(control_units, DataFrame) and control_units.empty:
+            return
+        if not isinstance(control_units, DataFrame) and not control_units:
             return
         _pp.add_mapping_control_units(self._handle, _control_units_to_c_dataframe(control_units), override)
 

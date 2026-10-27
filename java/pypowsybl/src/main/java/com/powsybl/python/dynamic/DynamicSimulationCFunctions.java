@@ -53,6 +53,8 @@ import com.powsybl.dynawo.mappings.DynamicSimulationSystems;
 import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
 import com.powsybl.dynawo.mappings.TapChangerBlockingsProviders;
 import com.powsybl.dynawo.models.BlackBoxModel;
+import com.powsybl.dynawo.mappings.preassembled.ControlUnitCatalog;
+import com.powsybl.dynawo.extensions.api.generator.SynchronousGeneratorProperties.Windings;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
 import com.powsybl.iidm.network.Network;
@@ -517,7 +519,36 @@ public final class DynamicSimulationCFunctions {
             public void run() {
                 PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
                 UpdatingDataframe controlUnitsDataframe = createDataframe(controlUnitsDataframePtr);
-                dynamicMapping.addControlUnits(ControlUnitsDataframeReader.read(controlUnitsDataframe), override);
+                dynamicMapping.addControlUnits(ControlUnitsDataframes.read(controlUnitsDataframe), override);
+            }
+        });
+    }
+
+    // the controls that ship, Dynawo's and the providers', one row per connection
+    @CEntryPoint(name = "getControlUnits")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getControlUnits(IsolateThread thread,
+                                                                                 ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                return Dataframes.createCDataframe(ControlUnitsDataframes.controlUnitsMapper(),
+                        ControlUnitsDataframes.rows(ControlUnitCatalog.shipped()));
+            }
+        });
+    }
+
+    // what a synchronous machine of that shape offers a control, while running and at initialisation
+    @CEntryPoint(name = "getMachineQuantities")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMachineQuantities(IsolateThread thread,
+                                                                                      CCharPointer windingsPtr,
+                                                                                      boolean transformer,
+                                                                                      ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                Windings windings = Windings.valueOf(CTypeUtil.toString(windingsPtr));
+                return Dataframes.createCDataframe(ControlUnitsDataframes.machineQuantitiesMapper(),
+                        ControlUnitsDataframes.machineQuantities(windings, transformer));
             }
         });
     }
