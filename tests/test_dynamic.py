@@ -7,6 +7,7 @@
 import pypowsybl as pp
 import pypowsybl.dynamic as dyn
 from pypowsybl.dynamic.impl.model_config import _to_c_dataframe
+from pypowsybl.dynamic.impl.control_units import _to_dataframe as _to_control_units_dataframe
 import pytest
 import pandas as pd
 import pypowsybl.network as pn
@@ -281,6 +282,154 @@ def test_add_model_configs_on_mapping():
                         var_mapping=[('GFL_Measurements_PFilterPu', 'p')], var_prefix={'terminal': 'GFL_terminal'})])
     # an empty list is a no-op
     model_mapping.add_model_configs([])
+
+
+GOVERNORS = 'Dynawo.Electrical.Controls.Machines.Governors.'
+REGULATORS = 'Dynawo.Electrical.Controls.Machines.VoltageRegulators.'
+STABILISERS = 'Dynawo.Electrical.Controls.Machines.PowerSystemStabilizers.'
+
+
+def _governor():
+    return (dyn.Governor('MyGov', model=GOVERNORS + 'Standard.Generic.GovCt2',
+                         init_model=GOVERNORS + 'GovernorPmPGen_INIT')
+            .reading('PGenPu', dyn.MachineQuantity.ACTIVE_POWER)
+            .reading('PmPu', dyn.MachineQuantity.MECHANICAL_POWER)
+            .reading('omegaPu', dyn.MachineQuantity.SPEED)
+            .starting_from('PGen0Pu', dyn.MachineQuantity.INIT_ACTIVE_POWER)
+            .starting_from('Pm0Pu', dyn.MachineQuantity.INIT_MECHANICAL_POWER))
+
+
+def _voltage_regulator():
+    return (dyn.VoltageRegulator('MyVr', model=REGULATORS + 'Standard.St5c',
+                                 init_model=REGULATORS + 'Standard.St15c_INIT')
+            .reading('EfdPu', dyn.MachineQuantity.FIELD_VOLTAGE)
+            .reading('UsPu', dyn.MachineQuantity.STATOR_VOLTAGE)
+            .starting_from('Efd0Pu', dyn.MachineQuantity.INIT_FIELD_VOLTAGE)
+            .starting_from('Us0Pu', dyn.MachineQuantity.INIT_STATOR_VOLTAGE)
+            .accepting(dyn.RegulatorInput.STABILISER, 'UPssPu'))
+
+
+def _stabiliser():
+    return (dyn.Pss('MyPss', model=STABILISERS + 'Standard.Pss2a', init_model=STABILISERS + 'Pss_INIT')
+            .reading('PGenPu', dyn.MachineQuantity.ACTIVE_POWER)
+            .reading('omegaPu', dyn.MachineQuantity.SPEED)
+            .starting_from('PGen0Pu', dyn.MachineQuantity.INIT_ACTIVE_POWER)
+            .driving('VPssPu', dyn.RegulatorInput.STABILISER))
+
+
+def test_control_units_rows():
+    df = _to_control_units_dataframe([_governor(), _voltage_regulator(), _stabiliser()])
+    # one row per connection, the definition repeated on each
+    assert list(df.index).count('MyGov') == 5
+    assert list(df.index).count('MyVr') == 5
+    assert list(df.index).count('MyPss') == 4
+    governor = df.loc['MyGov']
+    assert set(governor.kind) == {'GOVERNOR'}
+    assert set(governor.instance_id) == {'governor'}
+    speed = governor[governor.own_var == 'omegaPu'].iloc[0]
+    assert (speed.target_kind, speed.target, speed.init) == ('MACHINE', 'SPEED', 'false')
+    init = governor[governor.own_var == 'Pm0Pu'].iloc[0]
+    assert (init.target, init.init) == ('INIT_MECHANICAL_POWER', 'true')
+    accepted = df.loc['MyVr'][df.loc['MyVr'].target_kind == 'REGULATOR_INPUT'].iloc[0]
+    assert (accepted.own_var, accepted.target) == ('UPssPu', 'STABILISER')
+    driven = df.loc['MyPss'][df.loc['MyPss'].target_kind == 'REGULATOR_INPUT'].iloc[0]
+    assert (driven.own_var, driven.target) == ('VPssPu', 'STABILISER')
+
+
+def test_control_units_exciter_comes_with_its_regulator():
+    exciter = (dyn.Exciter('MyExciter', model='MyLibrary.Exciters.MyExciter')
+               .reading('EfdPu', dyn.MachineQuantity.FIELD_VOLTAGE)
+               .linked_to_regulator('VROutPu'))
+    regulator = dyn.VoltageRegulator('MyRegulator', model='MyLibrary.Regulators.MyRegulator').driving(exciter)
+    # only the regulator is given, its exciter is sent with it
+    df = _to_control_units_dataframe([regulator])
+    assert set(df.index) == {'MyRegulator', 'MyExciter'}
+    drives = df.loc[['MyRegulator']]
+    assert list(drives.target_kind) == ['EXCITER']
+    assert list(drives.target) == ['MyExciter']
+    assert set(df.loc['MyExciter'].target_kind) == {'MACHINE', 'REGULATOR_LINK'}
+
+
+def test_control_units_definition_errors():
+    # each kind has the id Dynawo's own assemblies give it, unless told otherwise
+    assert dyn.Governor('MyGov', model='M').instance_id == 'governor'
+    assert dyn.Pss('MyPss', model='M').instance_id == 'powerSystemStabilizer'
+    assert dyn.Pss('MyPss', model='M', instance_id='pss').instance_id == 'pss'
+    assert dyn.OverExcitationLimiter('MyOel', model='M').instance_id == 'overExcitationLimiter'
+    with pytest.raises(TypeError):
+        dyn.RegulatorControl('MyPss', model=STABILISERS + 'Standard.Pss2a')  # says nothing of its kind
+    with pytest.raises(ValueError):
+        _governor().reading('omegaPu', 'SPEEDD')
+    with pytest.raises(ValueError):
+        _to_control_units_dataframe([_governor(), dyn.Governor('MyGov', model='Other')])
+    # a control making no connection is still sent, as one row naming none
+    df = _to_control_units_dataframe([dyn.Governor('Fixed', model='MyLibrary.Fixed')])
+    assert list(df.target_kind) == ['']
+
+
+def test_add_control_units_on_mapping():
+    model_mapping = dyn.ModelMapping()
+    model_mapping.add_control_units([_governor(), _voltage_regulator(), _stabiliser()])
+    model_mapping.add_control_units([_governor()], override=True)
+    # an empty list is a no-op
+    model_mapping.add_control_units([])
+
+
+def test_set_modelica_models_dir(tmp_path):
+    model_mapping = dyn.ModelMapping()
+    model_mapping.set_modelica_models_dir(tmp_path)
+    model_mapping.set_modelica_models_dir(str(tmp_path))
+    with pytest.raises(ValueError):
+        model_mapping.set_modelica_models_dir(tmp_path / 'nothing here')
+
+
+def test_control_units_kinds():
+    df = _to_control_units_dataframe([_stabiliser(),
+                                      dyn.UnderExcitationLimiter('MyUel', model='M').driving('UUelPu', dyn.RegulatorInput.UNDER_EXCITATION)])
+    assert set(df.loc['MyPss'].kind) == {'PSS'}
+    assert df.loc['MyUel'].kind == 'UNDER_EXCITATION_LIMITER'
+    assert df.loc['MyUel'].instance_id == 'underExcitationLimiter'
+
+
+def test_get_control_units():
+    df = dyn.get_control_units(['GovCt2', 'St4b', 'Pss2a'])
+    assert set(df.index) == {'GovCt2', 'St4b', 'Pss2a'}
+    assert list(df.columns) == ['kind', 'model', 'init_model', 'instance_id', 'own_var', 'target_kind', 'target', 'init']
+    gov = df.loc['GovCt2']
+    assert set(gov.kind) == {'GOVERNOR'}
+    at_init = gov[gov.init]
+    assert set(at_init.target) == {'INIT_ACTIVE_POWER', 'INIT_MECHANICAL_POWER'}
+    assert set(gov[~gov.init].target) == {'ACTIVE_POWER', 'MECHANICAL_POWER', 'SPEED'}
+    pss = df.loc['Pss2a']
+    assert set(pss.kind) == {'PSS'}
+    driven = pss[pss.target_kind == 'REGULATOR_INPUT'].iloc[0]
+    assert (driven.own_var, driven.target) == ('VPssPu', 'STABILISER')
+    st4b = df.loc['St4b']
+    accepted = st4b[st4b.target_kind == 'REGULATOR_INPUT'].iloc[0]
+    assert (accepted.own_var, accepted.target) == ('UPssPu', 'STABILISER')
+    # every control that ships says what part it plays
+    assert '' not in set(dyn.get_control_units().kind)
+
+
+def test_get_control_units_copied_into_ones_own():
+    df = dyn.get_control_units(['GovCt2']).rename(index={'GovCt2': 'MyGovCt2'})
+    model_mapping = dyn.ModelMapping()
+    model_mapping.add_control_units(df)
+    rows = _to_control_units_dataframe(df)
+    assert set(rows.index) == {'MyGovCt2'}
+    assert set(rows.init) == {'true', 'false'}
+
+
+def test_get_machine_quantities():
+    df = dyn.get_machine_quantities('FOUR_WINDINGS')
+    assert df.loc['SPEED'].variable == 'omegaPu.value'
+    assert not df.loc['SPEED'].init
+    assert df.loc['INIT_MECHANICAL_POWER'].variable == 'Pm0Pu'
+    assert df.loc['INIT_MECHANICAL_POWER'].init
+    # a 1.7.0 machine offers no running quantity
+    assert 'RUNNING' not in df.index
+    assert len(df[df.init]) == 14
+    assert len(df[~df.init]) == 15
 
 
 def test_synchronous_generator_properties():

@@ -4,6 +4,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # SPDX-License-Identifier: MPL-2.0
 #
+import os
+from pathlib import Path
 from typing import Any, List, Optional, Union
 from numpy.typing import ArrayLike
 from pandas import DataFrame
@@ -12,6 +14,7 @@ from pypowsybl.network import Network
 from pypowsybl.report import ReportNode
 from pypowsybl.utils import create_data_frame_from_series_array, _get_c_dataframes  # pylint: disable=protected-access
 from .model_config import ModelConfig, _to_c_dataframe  # pylint: disable=protected-access
+from .control_units import ControlUnit, _to_c_dataframe as _control_units_to_c_dataframe  # pylint: disable=protected-access
 
 
 def _to_parameter_value(value: Any) -> str:
@@ -86,6 +89,75 @@ class ModelMapping:
         if not model_configs:
             return
         _pp.add_mapping_additional_models(self._handle, _to_c_dataframe(model_configs))
+
+    def add_control_units(self, control_units: Union[List[ControlUnit], DataFrame], override: bool = False) -> None:
+        """
+        Register machine controls of your own: governors, voltage regulators (with the exciter they
+        drive, if any) and the controls acting through a regulator, such as stabilisers.
+
+        They are put in the catalog the mappings added with :func:`create_mapping` design their
+        generator models from, when the mapping resolves (at :func:`get_models` as well as when a
+        simulation runs). A machine whose ``synchronousGeneratorProperties`` extension names one of
+        them by its ``name`` is then given a model built out of it, compiled by Dynawo if no model
+        already built holds it.
+
+        The controls hold for this mapping only: a mapping that registers none resolves against the
+        controls Dynawo ships.
+
+        A control whose Modelica model Dynawo does not ship is found in the directory given to
+        :func:`set_modelica_models_dir`, or else in the one named by the ``modelicaModelsDir``
+        property of the ``dynawo-mappings`` configuration module. Each input
+        of such a model that the assembly leaves unconnected has to be declared in a ``.extvar``
+        file beside its ``.mo``, as in Dynawo's own library.
+
+        Args:
+            control_units: the controls to register, as :class:`Governor`, :class:`VoltageRegulator`,
+                :class:`Pss`... or as a dataframe in the columns :func:`get_control_units` returns, so
+                a control that ships can be copied and changed into one of one's own
+            override: whether a control named like one the catalog already knows stands in for it.
+                By default the known one is kept and the new one left aside.
+
+        Examples:
+            .. code-block:: python
+
+                gov = (dyn.Governor('MyGov', model='MyLibrary.Governors.MyGov',
+                                    init_model='Dynawo.Electrical.Controls.Machines.Governors.Governor_INIT')
+                       .reading('PmPu', dyn.MachineQuantity.MECHANICAL_POWER)
+                       .reading('omegaPu', dyn.MachineQuantity.SPEED)
+                       .starting_from('Pm0Pu', dyn.MachineQuantity.INIT_MECHANICAL_POWER))
+                model_mapping.create_mapping('UniversalDynaWaltz')
+                model_mapping.add_control_units([gov])
+        """
+        if isinstance(control_units, DataFrame) and control_units.empty:
+            return
+        if not isinstance(control_units, DataFrame) and not control_units:
+            return
+        _pp.add_mapping_control_units(self._handle, _control_units_to_c_dataframe(control_units), override)
+
+    def set_modelica_models_dir(self, modelica_models_dir: Union[str, os.PathLike]) -> None:
+        """
+        Say where the Modelica sources of the controls registered with :func:`add_control_units`
+        are kept, for this mapping, in place of the ``modelicaModelsDir`` of the platform
+        configuration.
+
+        The directory is searched through, Dynawo's own library besides it, so several libraries can
+        be kept side by side under it: Dynawo takes a single such directory. A model built out of
+        those sources is rebuilt when they change.
+
+        Args:
+            modelica_models_dir: the directory holding the Modelica packages, for instance the one
+                holding ``MyLibrary/package.mo``
+
+        Examples:
+            .. code-block:: python
+
+                model_mapping.set_modelica_models_dir('/path/to/modelica')
+                model_mapping.add_control_units([gov])
+        """
+        path = Path(modelica_models_dir).expanduser().resolve()
+        if not path.is_dir():
+            raise ValueError(f'No Modelica models directory at {path}')
+        _pp.set_mapping_modelica_models_dir(self._handle, str(path))
 
     @staticmethod
     def get_available_mappings() -> DataFrame:

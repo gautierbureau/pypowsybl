@@ -2032,6 +2032,22 @@ void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* addi
     PowsyblCaller::get()->callJava<>(::addMappingAdditionalModels, dynamicMappingHandle, additionalModelsDf);
 }
 
+void addMappingControlUnits(JavaHandle dynamicMappingHandle, dataframe* controlUnitsDf, bool override) {
+    PowsyblCaller::get()->callJava<>(::addMappingControlUnits, dynamicMappingHandle, controlUnitsDf, override);
+}
+
+void setMappingModelicaModelsDir(JavaHandle dynamicMappingHandle, const std::string& modelicaModelsDir) {
+    PowsyblCaller::get()->callJava<>(::setMappingModelicaModelsDir, dynamicMappingHandle, (char*) modelicaModelsDir.c_str());
+}
+
+SeriesArray* getControlUnits() {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getControlUnits));
+}
+
+SeriesArray* getMachineQuantities(const std::string& windings, bool transformer) {
+    return new SeriesArray(PowsyblCaller::get()->callJava<array*>(::getMachineQuantities, (char*) windings.c_str(), transformer));
+}
+
 void addOutputVariables(JavaHandle outputVariablesHandle, std::string dynamicId, std::vector<std::string>& variables, OutputVariableType variableType) {
     ToCharPtrPtr variablesPtr(variables);
     PowsyblCaller::get()->callJava<>(::addOutputVariables, outputVariablesHandle, (char*) dynamicId.c_str(), variablesPtr.get(), variables.size(), variableType);

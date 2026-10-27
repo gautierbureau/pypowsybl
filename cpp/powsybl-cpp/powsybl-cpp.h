@@ -1076,6 +1076,14 @@ SeriesArray* getEventsInformation();
 // additional dynamic models
 void addMappingAdditionalModels(JavaHandle dynamicMappingHandle, dataframe* additionalModelsDf);
 
+void addMappingControlUnits(JavaHandle dynamicMappingHandle, dataframe* controlUnitsDf, bool override);
+
+void setMappingModelicaModelsDir(JavaHandle dynamicMappingHandle, const std::string& modelicaModelsDir);
+
+SeriesArray* getControlUnits();
+
+SeriesArray* getMachineQuantities(const std::string& windings, bool transformer);
+
 // dynamic model mapping
 void addDynamicMappings(JavaHandle dynamicMappingHandle, std::string categoryName, dataframe_array* dataframes);
 std::vector<std::vector<SeriesMetadata>> getDynamicMappingsMetaData(std::string categoryName);

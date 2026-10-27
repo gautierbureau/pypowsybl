@@ -22,6 +22,11 @@ from .impl.extensions import (
     get_dynamic_simulation_systems,
 )
 from .impl.model_config import ModelConfig
+from .impl.control_units import (
+    Governor, VoltageRegulator, Exciter, RegulatorControl, Pss, OverExcitationLimiter, UnderExcitationLimiter,
+    StatorCurrentLimiter, ReactivePowerControlLoop, MachineQuantity, RegulatorInput, get_control_units,
+    get_machine_quantities
+)
 from .impl.criteria import Criteria
 from .impl.security_analysis import DynamicSecurityAnalysis
 from .impl.security_analysis_parameters import DynamicSecurityAnalysisParameters

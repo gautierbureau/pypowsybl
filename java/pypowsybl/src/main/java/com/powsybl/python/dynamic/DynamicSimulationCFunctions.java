@@ -53,6 +53,8 @@ import com.powsybl.dynawo.mappings.DynamicSimulationSystems;
 import com.powsybl.dynawo.mappings.SynchronousGeneratorPropertiesProviders;
 import com.powsybl.dynawo.mappings.TapChangerBlockingsProviders;
 import com.powsybl.dynawo.models.BlackBoxModel;
+import com.powsybl.dynawo.mappings.preassembled.ControlUnitCatalog;
+import com.powsybl.dynawo.extensions.api.generator.SynchronousGeneratorProperties.Windings;
 import com.powsybl.dynawo.parameters.ParametersSet;
 import com.powsybl.dynawo.xml.ParametersXml;
 import com.powsybl.iidm.network.Network;
@@ -502,6 +504,65 @@ public final class DynamicSimulationCFunctions {
                 UpdatingDataframe additionalModelsDataframe = createDataframe(additionalModelsDataframePtr);
                 dynamicMapping.getOrCreateMappingParameters().setAdditionalModels(
                         DynamicSimulationParametersCUtils.readAdditionalModels(additionalModelsDataframe));
+            }
+        });
+    }
+
+    // controls of the study's own, registered in the control catalog when the mapping resolves, so a
+    // machine whose extension names one is given a model built out of it
+    @CEntryPoint(name = "addMappingControlUnits")
+    public static void addMappingControlUnits(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                              DataframePointer controlUnitsDataframePtr, boolean override,
+                                              ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                UpdatingDataframe controlUnitsDataframe = createDataframe(controlUnitsDataframePtr);
+                dynamicMapping.addControlUnits(ControlUnitsDataframes.read(controlUnitsDataframe), override);
+            }
+        });
+    }
+
+    // the controls that ship, Dynawo's and the providers', one row per connection
+    @CEntryPoint(name = "getControlUnits")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getControlUnits(IsolateThread thread,
+                                                                                 ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                return Dataframes.createCDataframe(ControlUnitsDataframes.controlUnitsMapper(),
+                        ControlUnitsDataframes.rows(ControlUnitCatalog.shipped()));
+            }
+        });
+    }
+
+    // what a synchronous machine of that shape offers a control, while running and at initialisation
+    @CEntryPoint(name = "getMachineQuantities")
+    public static ArrayPointer<PyPowsyblApiHeader.SeriesPointer> getMachineQuantities(IsolateThread thread,
+                                                                                      CCharPointer windingsPtr,
+                                                                                      boolean transformer,
+                                                                                      ExceptionHandlerPointer exceptionHandlerPtr) {
+        return doCatch(exceptionHandlerPtr, new PointerProvider<ArrayPointer<PyPowsyblApiHeader.SeriesPointer>>() {
+            @Override
+            public ArrayPointer<PyPowsyblApiHeader.SeriesPointer> get() {
+                Windings windings = Windings.valueOf(CTypeUtil.toString(windingsPtr));
+                return Dataframes.createCDataframe(ControlUnitsDataframes.machineQuantitiesMapper(),
+                        ControlUnitsDataframes.machineQuantities(windings, transformer));
+            }
+        });
+    }
+
+    // where the Modelica sources of the study's own controls are kept, in place of the platform's
+    @CEntryPoint(name = "setMappingModelicaModelsDir")
+    public static void setMappingModelicaModelsDir(IsolateThread thread, ObjectHandle dynamicMappingHandle,
+                                                   CCharPointer modelicaModelsDirPtr,
+                                                   ExceptionHandlerPointer exceptionHandlerPtr) {
+        doCatch(exceptionHandlerPtr, new Runnable() {
+            @Override
+            public void run() {
+                PythonDynamicModelsSupplier dynamicMapping = ObjectHandles.getGlobal().get(dynamicMappingHandle);
+                dynamicMapping.setModelicaModelsDir(Path.of(CTypeUtil.toString(modelicaModelsDirPtr)));
             }
         });
     }
