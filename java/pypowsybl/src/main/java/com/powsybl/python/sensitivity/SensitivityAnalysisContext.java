@@ -331,11 +331,10 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
                 .collect(Collectors.toMap(SensitivityVariableSet::getId, e -> e));
 
         // Reverse mode needs only the monitored functions + the variables, NOT the functions×variables cross
-        // product. Pass them as per-function-type blocks; OpenLoadFlow builds the O(F+V) adjoint factor set
-        // from them (AcSensitivityAnalysis.buildAdjointFactors, gated in AcSensitivityAnalysisAdjointTest),
+        // product: OpenLoadFlow builds the O(F+V) adjoint factor set from them (AcSensitivityAnalysis.buildAdjointFactors),
         // turning a ~F·V allocation (millions of factors on a real case) into ~F+V.
-        List<AcSensitivityAnalysis.AdjointBlock> blocks = new ArrayList<>();
-        Map<String, Double> cotangentByFunctionId = new HashMap<>();
+        Map<AcSensitivityAnalysis.FunctionRef, Double> cotangentsByFunction = new LinkedHashMap<>();
+        List<AcSensitivityAnalysis.AdjointVariable> variables = new ArrayList<>();
 
         for (MatrixInfo matrix : matrices) {
             List<String> columns = matrix.getColumnIds();
@@ -343,33 +342,31 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
             SensitivityFunctionType functionType = matrix.getFunctionType();
 
             // dL/dfunction per declared function (column), read from the flat column-aligned cotangent vector.
-            // Key by (functionType, resolvedFunctionId): a branch monitored by several function types (current
-            // and active power) shares one id, so keying by id alone would merge their cotangents. This build
-            // stays caller-side — it depends on the matrix column layout (offsetColumn), which OLF ignores.
+            // Keyed by (functionType, functionId): a branch monitored by several function types (current and
+            // active power) shares one id, so keying by id alone would merge their cotangents. OpenLoadFlow reads
+            // a cotangent by the id as declared, and resolves a bus id itself.
             for (int j = 0; j < columns.size(); j++) {
-                String functionId = SensitivityFactor.resolveBusId(columns.get(j), functionType, network);
-                putFunctionCotangent(cotangentByFunctionId,
-                        AcSensitivityAnalysis.functionCotangentKey(functionType, functionId),
+                putFunctionCotangent(cotangentsByFunction, new AcSensitivityAnalysis.FunctionRef(functionType, columns.get(j)),
                         functionCotangents[matrix.getOffsetColumn() + j]);
             }
 
-            // variables (rows) of this block, each with its resolved type + set-ness
-            List<AcSensitivityAnalysis.AdjointVariable> variables = new ArrayList<>();
+            // variables (rows) of this matrix, each with its resolved type + set-ness
             for (String variableId : rows) {
                 boolean[] vSet = new boolean[1];
                 SensitivityVariableType vType = resolveAdjointVariableType(network, variableId, matrix, variableSetsById, vSet);
-                variables.add(new AcSensitivityAnalysis.AdjointVariable(variableId, vType, vSet[0]));
+                variables.add(vSet[0] ? AcSensitivityAnalysis.AdjointVariable.ofVariableSet(vType, variableId)
+                                      : AcSensitivityAnalysis.AdjointVariable.of(vType, variableId));
             }
-            blocks.add(new AcSensitivityAnalysis.AdjointBlock(functionType, columns, variables));
         }
 
         SensitivityAnalysisProvider p = SensitivityAnalysisCUtils.getSensitivityAnalysisProvider(provider);
         if (!(p instanceof OpenSensitivityAnalysisProvider olfProvider)) {
             throw new PowsyblException("Adjoint (VJP) sensitivity requires the OpenLoadFlow provider, got '" + p.getName() + "'");
         }
-        Map<String, Double> gradientByVariableId = olfProvider.runAdjoint(network,
-                network.getVariantManager().getWorkingVariantId(), blocks, cotangentByFunctionId, variableSets,
-                sensitivityAnalysisParameters);
+        Map<String, Double> gradientByVariableId = new LinkedHashMap<>();
+        olfProvider.runAdjoint(network, network.getVariantManager().getWorkingVariantId(), cotangentsByFunction, variables,
+                        variableSets, sensitivityAnalysisParameters)
+                .forEach((variable, gradient) -> gradientByVariableId.put(variable.id(), gradient));
 
         return new SensitivityAnalysisAdjointResultContext(factorsMatrix, gradientByVariableId);
     }
@@ -390,10 +387,11 @@ class SensitivityAnalysisContext extends ContingencyContainerImpl {
      * here", which keeps the zero-fill convention working unchanged; two different non-zero values are a
      * genuine contradiction about one number and are rejected rather than blended.</p>
      */
-    private static void putFunctionCotangent(Map<String, Double> cotangentByFunctionId, String key, double value) {
-        Double previous = cotangentByFunctionId.get(key);
+    private static void putFunctionCotangent(Map<AcSensitivityAnalysis.FunctionRef, Double> cotangentByFunction,
+                                             AcSensitivityAnalysis.FunctionRef key, double value) {
+        Double previous = cotangentByFunction.get(key);
         if (previous == null || previous == 0.0) {
-            cotangentByFunctionId.put(key, value);
+            cotangentByFunction.put(key, value);
             return;
         }
         if (value != 0.0 && value != previous) {
