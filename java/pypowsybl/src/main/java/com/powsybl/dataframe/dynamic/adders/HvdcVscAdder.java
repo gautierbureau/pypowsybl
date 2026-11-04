@@ -13,7 +13,6 @@ import com.powsybl.dataframe.dynamic.CategoryInformation;
 import com.powsybl.dataframe.update.UpdatingDataframe;
 import com.powsybl.dynawo.builders.ModelInfo;
 import com.powsybl.dynawo.models.hvdc.HvdcVscBuilder;
-import com.powsybl.iidm.network.HvdcLine;
 import com.powsybl.iidm.network.Network;
 
 import java.util.Collection;
@@ -21,12 +20,12 @@ import java.util.Collection;
 /**
  * @author Laurent Issertial {@literal <laurent.issertial at rte-france.com>}
  */
-public class HvdcVscAdder extends AbstractEquipmentAdder {
+public class HvdcVscAdder extends AbstractHvdcAdder {
 
     private static final CategoryInformation CATEGORY_INFORMATION = new CategoryInformation(
             "HvdcVsc",
             "HVDC VSC",
-            CategoryAttributeUtils.createFromMetadata(EQUIPMENT_METADATA));
+            CategoryAttributeUtils.createFromMetadata(HVDC_METADATA));
 
     protected HvdcVscAdder() {
         super(CATEGORY_INFORMATION);
@@ -39,7 +38,7 @@ public class HvdcVscAdder extends AbstractEquipmentAdder {
 
     @Override
     protected DynamicModelSeries createDynamicModelSeries(UpdatingDataframe dataframe) {
-        return new AbstractEquipmentSeries<HvdcLine, HvdcVscBuilder>(dataframe) {
+        return new AbstractHvdcSeries<HvdcVscBuilder>(dataframe) {
 
             @Override
             protected HvdcVscBuilder createBuilder(Network network, ReportNode reportNode) {

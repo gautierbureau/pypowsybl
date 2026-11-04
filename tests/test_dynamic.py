@@ -52,7 +52,8 @@ def test_add_mapping():
     model_mapping.add_grid_forming_converter(static_id='GEN', parameter_set_id='gf', model_name='GridFormingConverterMatchingControl')
     model_mapping.add_signal_n_generator(static_id='GEN', parameter_set_id='signal_n', model_name='GeneratorPVSignalN')
     model_mapping.add_hvdc_p(static_id='HVDC_LINE', parameter_set_id='hvdc_p', model_name='HvdcPV')
-    model_mapping.add_hvdc_vsc(static_id='HVDC_LINE', parameter_set_id='hvdc_vsc', model_name='HvdcVSCDanglingP')
+    model_mapping.add_hvdc_vsc(static_id='HVDC_LINE', parameter_set_id='hvdc_vsc', model_name='HvdcVSCDanglingP',
+                               dangling_side='ONE')
     model_mapping.add_base_transformer(static_id='TFO', parameter_set_id='tfo', model_name='TransformerFixedRatio')
     model_mapping.add_base_static_var_compensator(static_id='SVARC', parameter_set_id='svarc', model_name='StaticVarCompensatorPV')
     model_mapping.add_shunt(static_id='SHUNT', parameter_set_id='sh', model_name='ShuntB')

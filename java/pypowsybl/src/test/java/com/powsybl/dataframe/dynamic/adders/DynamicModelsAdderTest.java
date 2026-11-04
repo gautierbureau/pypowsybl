@@ -14,6 +14,9 @@ import com.powsybl.dataframe.update.UpdatingDataframe;
 import com.powsybl.dynawo.models.AbstractPureDynamicBlackBoxModel;
 import com.powsybl.dynawo.models.TransformerSide;
 import com.powsybl.dynawo.models.automationsystems.TapChangerBlockingAutomationSystem;
+import com.powsybl.dynawo.models.hvdc.BaseHvdc;
+import com.powsybl.iidm.network.HvdcConverterStation;
+import com.powsybl.iidm.network.HvdcLine;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.iidm.network.PhaseTapChanger;
 import com.powsybl.iidm.network.TwoSides;
@@ -195,6 +198,62 @@ class DynamicModelsAdderTest {
                 Arguments.of("InertialGrid", EurostagTutorialExample1Factory.create(), "GEN"),
                 Arguments.of("Shunt", ShuntTestCaseFactory.create(), "SHUNT")
                 );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("hvdcDanglingProvider")
+    void testHvdcDanglingSide(String category, String modelName) {
+        Network network = HvdcTestNetwork.createVsc();
+        HvdcLine line = network.getHvdcLine("L");
+        dataframe.addSeries(STATIC_ID, true, createTwoRowsSeries("L"));
+        dataframe.addSeries(PARAMETER_SET_ID, false, createTwoRowsSeries("hvdc"));
+        dataframe.addSeries(MODEL_NAME, false, createTwoRowsSeries(modelName));
+        dataframe.addSeries(DANGLING_SIDE, false, new TestStringSeries(TwoSides.ONE.toString(), TwoSides.TWO.toString()));
+        DynamicMappingHandler.addElements(category, dynamicModelsSupplier, List.of(dataframe));
+
+        assertThat(dynamicModelsSupplier.get(network)).satisfiesExactly(
+                model1 -> assertThat(model1).asInstanceOf(InstanceOfAssertFactories.type(BaseHvdc.class))
+                        .extracting(BaseHvdc::getConnectedStations, InstanceOfAssertFactories.list(HvdcConverterStation.class))
+                        .containsExactly(line.getConverterStation2()),
+                model2 -> assertThat(model2).asInstanceOf(InstanceOfAssertFactories.type(BaseHvdc.class))
+                        .extracting(BaseHvdc::getConnectedStations, InstanceOfAssertFactories.list(HvdcConverterStation.class))
+                        .containsExactly(line.getConverterStation1()));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("hvdcDanglingProvider")
+    void testHvdcDanglingSideDefault(String category, String modelName) {
+        Network network = HvdcTestNetwork.createVsc();
+        HvdcLine line = network.getHvdcLine("L");
+        dataframe.addSeries(STATIC_ID, true, createTwoRowsSeries("L"));
+        dataframe.addSeries(PARAMETER_SET_ID, false, createTwoRowsSeries("hvdc"));
+        dataframe.addSeries(MODEL_NAME, false, createTwoRowsSeries(modelName));
+        DynamicMappingHandler.addElements(category, dynamicModelsSupplier, List.of(dataframe));
+
+        // Without the column the builder default side (TWO) applies: station 1 is the connected one
+        assertThat(dynamicModelsSupplier.get(network)).allSatisfy(
+                model -> assertThat(model).asInstanceOf(InstanceOfAssertFactories.type(BaseHvdc.class))
+                        .extracting(BaseHvdc::getConnectedStations, InstanceOfAssertFactories.list(HvdcConverterStation.class))
+                        .containsExactly(line.getConverterStation1()));
+    }
+
+    @Test
+    void testHvdcDanglingSideOnNonDanglingModel() {
+        Network network = HvdcTestNetwork.createVsc();
+        dataframe.addSeries(STATIC_ID, true, createTwoRowsSeries("L"));
+        dataframe.addSeries(PARAMETER_SET_ID, false, createTwoRowsSeries("hvdc"));
+        dataframe.addSeries(MODEL_NAME, false, createTwoRowsSeries("HvdcPV"));
+        dataframe.addSeries(DANGLING_SIDE, false, createTwoRowsSeries(TwoSides.ONE.toString()));
+        DynamicMappingHandler.addElements("HvdcP", dynamicModelsSupplier, List.of(dataframe));
+
+        // A dangling side on a model without a dangling side is rejected by the builder
+        assertThat(dynamicModelsSupplier.get(network)).isEmpty();
+    }
+
+    private static Stream<Arguments> hvdcDanglingProvider() {
+        return Stream.of(
+                Arguments.of("HvdcP", "HvdcPVDangling"),
+                Arguments.of("HvdcVsc", "HvdcVSCDanglingP"));
     }
 
     private static Stream<Arguments> automationSystemProvider() {
