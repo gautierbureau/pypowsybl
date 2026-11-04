@@ -451,6 +451,8 @@ class ModelMapping:
             - **parameter_set_id**: id of the parameter for this model given in the dynawo configuration
 
             - **model_name**: name of the model used for the mapping (if none the default model will be used)
+            - **dangling_side**: for dangling models only, side (``ONE`` or ``TWO``) of the converter station connected
+              to a switched-off bus (default ``TWO``)
 
         Examples:
             Using keyword arguments:
@@ -460,6 +462,10 @@ class ModelMapping:
                 model_mapping.add_hvdc_p(static_id='HVDC_LINE',
                                          parameter_set_id='hvdc_p',
                                          model_name='HvdcPV')
+                model_mapping.add_hvdc_p(static_id='HVDC_LINE_2',
+                                         parameter_set_id='hvdc_p_dangling',
+                                         model_name='HvdcPVDangling',
+                                         dangling_side='ONE')
         """
         self._add_all_dynamic_mappings('HvdcP', [df], **kwargs)
 
@@ -482,6 +488,8 @@ class ModelMapping:
             - **parameter_set_id**: id of the parameter for this model given in the dynawo configuration
 
             - **model_name**: name of the model used for the mapping (if none the default model will be used)
+            - **dangling_side**: for dangling models only, side (``ONE`` or ``TWO``) of the converter station connected
+              to a switched-off bus (default ``TWO``)
 
         Examples:
             Using keyword arguments:
@@ -490,7 +498,8 @@ class ModelMapping:
 
                 model_mapping.add_hvdc_vsc(static_id='HVDC_LINE',
                                            parameter_set_id='hvdc_vsc',
-                                           model_name='HvdcVSCDanglingP')
+                                           model_name='HvdcVSCDanglingP',
+                                           dangling_side='ONE')
         """
         self._add_all_dynamic_mappings('HvdcVsc', [df], **kwargs)
 
