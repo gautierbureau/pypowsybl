@@ -3,6 +3,7 @@
   "includes":[
     {"pattern":"\\QMETA-INF/services/com.powsybl.dynamicsimulation.DynamicSimulationProvider\\E"},
     {"pattern":"\\QMETA-INF/services/com.powsybl.dynawo.builders.ModelConfigLoader\\E"},
+    {"pattern":"\\QMETA-INF/services/com.powsybl.dataframe.dynamic.adders.ModelAdderLoader\\E"},
     {"pattern":"\\Qmodels.json\\E"}
   ]}
 }

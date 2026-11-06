@@ -1,5 +1,25 @@
 [
   {
+    "name":"com.powsybl.dynawo.DynawoSimulationProvider",
+    "allPublicConstructors" : true
+  },
+  {
+    "name":"com.powsybl.dataframe.dynamic.adders.ModelAdderLoaderImpl",
+    "allPublicConstructors" : true
+  },
+  {
+    "name":"com.rte_france.powsybl.dataframe.dynamic.adders.RteModelAdderLoaderImpl",
+    "allPublicConstructors" : true
+  },
+  {
+    "name":"com.powsybl.dynawo.builders.ModelConfigLoaderImpl",
+    "allPublicConstructors" : true
+  },
+  {
+    "name":"com.rte_france.powsybl.dynawo.builders.RteModelConfigLoaderImpl",
+    "allPublicConstructors" : true
+  },
+  {
     "name":"com.powsybl.dynawo.DynawoSimulationParameters",
     "queryAllDeclaredConstructors" : true,
     "queryAllPublicConstructors" : true,
