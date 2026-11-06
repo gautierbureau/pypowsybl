@@ -80,6 +80,9 @@ class PyPowsyblBuild(build_ext):
                 for filename in glob.glob(os.path.join(bin_dir, '*.*')):
                     shutil.copy(filename, extdir)
 
+        if os.environ.get('PYPOWSYBL_CUDSS') == '1':
+            cmake_args += ['-DPYPOWSYBL_CUDSS=ON']
+
         cpp_source_dir=os.path.abspath('cpp')
         subprocess.check_call(['cmake', cpp_source_dir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
@@ -101,6 +104,8 @@ class PyPowsyblBuild(build_ext):
                                os.path.join(binary_dir, 'libjniortools.so'),
                                os.path.join(binary_dir, 'libortools.so.9'),
                                os.path.join(binary_dir, 'libpypowsybl-java.so')]
+            if os.environ.get('PYPOWSYBL_CUDSS') == '1':
+                binaries['lib'].append(os.path.join(binary_dir, 'libmathcudss.so'))
         elif platform.system() == "Darwin" :
             binaries['lib'] = [os.path.join(binary_dir, 'libmath.dylib'),
                                os.path.join(binary_dir, 'libjniortools.dylib'),

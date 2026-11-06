@@ -23,6 +23,12 @@ def test_gpu_providers_are_listed():
     assert GPU_PROVIDER in pp.security.get_provider_names()
 
 
+def test_gpu_provider_takes_olf_and_gpu_parameters():
+    names = pp.loadflow.get_provider_parameters_names(GPU_PROVIDER)
+    assert 'maxNewtonRaphsonIterations' in names
+    assert 'reorderingAlgorithm' in names
+
+
 def test_gpu_load_flow_matches_cpu():
     n_cpu = pp.network.create_ieee14()
     n_gpu = pp.network.create_ieee14()

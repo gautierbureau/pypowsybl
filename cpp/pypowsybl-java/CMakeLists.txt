@@ -44,6 +44,13 @@ macro(extract_and_install_native_lib jar_file jar_entry library_file)
   endif()
 endmacro()
 
+# PYPOWSYBL_CUDSS: build on the cuDSS-enabled powsybl-core / powsybl-math-native (maven profile cudss) and ship
+# libmathcudss (CuDssMatrixFactory's JNI library) next to libmath. Linux only; cuDSS itself is never bundled.
+option(PYPOWSYBL_CUDSS "Build with the cuDSS-enabled powsybl-core and powsybl-math-native" OFF)
+if(PYPOWSYBL_CUDSS)
+    set(MAVEN_PROFILE_ARGS -Pcudss)
+endif()
+
 cmake_path(SET math-native-jar "${PYPOWSYBL_JAVA_SRC_DIR}/target/dependency/powsybl-math-native.jar")
 cmake_path(SET ortools-jar "${PYPOWSYBL_JAVA_SRC_DIR}/target/dependency/ortools-${CMAKE_SYSTEM_NAME}-${ARCH_ID}.jar")
 
@@ -52,6 +59,9 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
     extract_and_install_native_lib(${ortools-jar} ortools-win32-${ARCH_ID} jniortools.dll)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     extract_and_install_native_lib(${math-native-jar} natives/linux_${OS_BITS} libmath.so)
+    if(PYPOWSYBL_CUDSS)
+        extract_and_install_native_lib(${math-native-jar} natives/linux_${OS_BITS} libmathcudss.so)
+    endif()
     extract_and_install_native_lib(${ortools-jar} ortools-linux-${ARCH_ID} libjniortools.so)
     extract_and_install_native_lib(${ortools-jar} ortools-linux-${ARCH_ID} libortools.so.9)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -77,7 +87,7 @@ endif()
 
 ExternalProject_Add(mvn
     SOURCE_DIR ${PYPOWSYBL_JAVA_SRC_DIR}
-    PATCH_COMMAND ${MAVEN_CMD} -B -ntp clean package
+    PATCH_COMMAND ${MAVEN_CMD} -B -ntp ${MAVEN_PROFILE_ARGS} clean package
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""

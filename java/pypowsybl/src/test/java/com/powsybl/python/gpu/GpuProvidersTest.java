@@ -7,6 +7,7 @@
  */
 package com.powsybl.python.gpu;
 
+import com.powsybl.commons.parameters.Parameter;
 import com.powsybl.iidm.network.Network;
 import com.powsybl.iidm.network.test.EurostagTutorialExample1Factory;
 import com.powsybl.loadflow.LoadFlowParameters;
@@ -18,7 +19,10 @@ import com.powsybl.python.loadflow.LoadFlowCUtils;
 import com.powsybl.python.security.SecurityAnalysisCUtils;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -34,6 +38,15 @@ class GpuProvidersTest {
     void providersAreFound() {
         assertEquals(GPU_PROVIDER, LoadFlowCUtils.getLoadFlowProvider(GPU_PROVIDER).getName());
         assertEquals(GPU_PROVIDER, SecurityAnalysisCUtils.getSecurityAnalysisProvider(GPU_PROVIDER).getName());
+    }
+
+    /** pypowsybl's provider_parameters reach OpenLoadFlow's parameters as well as the GPU solver's. */
+    @Test
+    void providerParametersIncludeOlfOnes() {
+        List<String> names = LoadFlowCUtils.getLoadFlowProvider(GPU_PROVIDER).getSpecificParameters().stream()
+                .map(Parameter::getName).toList();
+        assertTrue(names.contains("maxNewtonRaphsonIterations"));
+        assertTrue(names.contains("reorderingAlgorithm"));
     }
 
     @Test
