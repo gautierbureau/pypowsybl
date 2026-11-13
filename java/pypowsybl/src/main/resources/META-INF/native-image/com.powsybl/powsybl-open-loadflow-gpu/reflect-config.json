@@ -1,0 +1,46 @@
+[
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuLoadFlowParameterJsonSerializer$SerializationSpec",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuLoadFlowParameters",
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "allDeclaredClasses": true,
+    "allDeclaredFields": true,
+    "allPublicClasses": true,
+    "allPublicMethods": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuLinearSolver",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuReorderingAlgorithm",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuBatchedLuOrdering",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuMatchingAlgorithm",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "com.powsybl.openloadflow.ac.solver.gpu.GpuPivotType",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true
+  }
+]
