@@ -12,6 +12,7 @@ relying as much as possible on practical examples.
    network_visualization
    per_unit
    loadflow
+   gpu
    rao
    security
    sensitivity

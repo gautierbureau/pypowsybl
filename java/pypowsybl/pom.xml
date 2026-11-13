@@ -347,6 +347,19 @@
             <groupId>com.powsybl</groupId>
             <artifactId>powsybl-open-loadflow</artifactId>
         </dependency>
+        <!-- OpenLoadFlowGpu load flow and security analysis providers. Its libolfgpu JNI library is a classpath
+             resource of this jar, present only when olf-gpu was built with native/build-gpu.sh. The math-native
+             version stays the one pypowsybl ships (the GPU extension does not need the cuDSS-enabled fork). -->
+        <dependency>
+            <groupId>com.powsybl</groupId>
+            <artifactId>powsybl-open-loadflow-gpu</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.powsybl</groupId>
+                    <artifactId>powsybl-math-native</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>com.powsybl</groupId>
             <artifactId>powsybl-powerfactory-converter</artifactId>

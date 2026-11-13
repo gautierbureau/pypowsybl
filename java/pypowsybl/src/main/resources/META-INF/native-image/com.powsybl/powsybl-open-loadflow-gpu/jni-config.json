@@ -1,0 +1,17 @@
+[
+{
+  "name":"[D"
+},
+{
+  "name":"java.lang.IllegalArgumentException",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.String"] }]
+},
+{
+  "name":"java.lang.IllegalStateException",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.String"] }]
+},
+{
+  "name":"java.lang.RuntimeException",
+  "methods":[{"name":"<init>","parameterTypes":["java.lang.String"] }]
+}
+]

@@ -70,10 +70,41 @@
         <java.version>21</java.version>
         <powsybl-dependencies.version>2026.1.0</powsybl-dependencies.version>
         <powsybl-open-reac.version>0.18.0</powsybl-open-reac.version>
+        <!-- GPU load flow / security analysis provider (OpenLoadFlowGpu, gautierbureau/olf-gpu). It needs OLF built
+             from the olf-local-patches branch of gautierbureau/powsybl-open-loadflow, installed in the local Maven
+             repository: see docs/user_guide/gpu.rst. -->
+        <powsybl-open-loadflow.version>2.4.0-SNAPSHOT-gpu</powsybl-open-loadflow.version>
+        <powsybl-open-loadflow-gpu.version>1.0.0-SNAPSHOT</powsybl-open-loadflow-gpu.version>
+        <!-- powsybl-dependencies' own versions, imported ahead of it so the cudss profile can change them -->
+        <powsybl-core.version>7.3.0</powsybl-core.version>
+        <powsybl-math-native.version>1.5.0</powsybl-math-native.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Declared before the BOM import, so they win over its versions -->
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-math-native</artifactId>
+                <version>${powsybl-math-native.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-core</artifactId>
+                <version>${powsybl-core.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-open-loadflow</artifactId>
+                <version>${powsybl-open-loadflow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.powsybl</groupId>
+                <artifactId>powsybl-open-loadflow-gpu</artifactId>
+                <version>${powsybl-open-loadflow-gpu.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.powsybl</groupId>
                 <artifactId>powsybl-dependencies</artifactId>
@@ -83,6 +114,20 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <!-- -Pcudss: build on the cuDSS-enabled powsybl-core (cudss_factory branch of gautierbureau/powsybl-core,
+             CuDssMatrixFactory) and powsybl-math-native (cudss_solver_1 branch of gautierbureau/powsybl-math-native,
+             libmathcudss), the versions olf-gpu itself builds against. Both must be installed in the local Maven
+             repository: see docs/user_guide/gpu.rst. -->
+        <profile>
+            <id>cudss</id>
+            <properties>
+                <powsybl-core.version>7.4.0-SNAPSHOT</powsybl-core.version>
+                <powsybl-math-native.version>1.6.0-SNAPSHOT-gpu</powsybl-math-native.version>
+            </properties>
+        </profile>
+    </profiles>
 
     <modules>
         <module>pypowsybl</module>
